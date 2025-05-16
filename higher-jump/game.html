@@ -1,0 +1,943 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Vertical Arrow Slingshot (Faster dt Physics with Particles)</title>
+    <style>
+      :root {
+        /* Base theme (green) */
+        --bg-color: #091c1e;
+        --platform-color: #4bea69;
+        --particle-color: 75, 234, 105; /* For use in rgba() */
+        --arrow-primary: #34ac80;
+        --arrow-secondary: #4bea69;
+        --arrow-accent: #0b5027;
+      }
+
+      /* Remove transition on variables; animate the actual properties */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: var(--bg-color);
+        overflow: hidden;
+        transition: background-color 1s ease-in-out; /* changed from 2s to 1s */
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        background: var(--bg-color);
+      }
+      #score {
+        position: absolute;
+        top: 22px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: white;
+        font-family: sans-serif;
+        font-size: 18px;
+        user-select: none;
+        pointer-events: none;
+        z-index: 2;
+      }
+      #instruction {
+        position: absolute;
+        bottom: 32px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: white;
+        font-family: sans-serif;
+        font-size: 14px;
+        text-align: center;
+        user-select: none;
+        pointer-events: none;
+        z-index: 2;
+        animation: flash 3s infinite;
+      }
+      @keyframes flash {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@farcade/game-sdk@latest/dist/index.min.js"></script>
+  </head>
+  <body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="score">Score: 0</div>
+    <div id="instruction">Click or drag down on the arrow to jump</div>
+
+    <script>
+      // --------------------------
+      // Helper functions for color math
+      // --------------------------
+      function hexToRgb(hex) {
+        hex = hex.replace("#", "");
+        if (hex.length === 3) {
+          hex = hex
+            .split("")
+            .map((x) => x + x)
+            .join("");
+        }
+        const bigint = parseInt(hex, 16);
+        return {
+          r: (bigint >> 16) & 255,
+          g: (bigint >> 8) & 255,
+          b: bigint & 255,
+        };
+      }
+      function rgbToHex({ r, g, b }) {
+        return "#" + [r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("");
+      }
+      function lerp(a, b, t) {
+        return a + (b - a) * t;
+      }
+
+      // --------------------------
+      // Canvas & Game Setup (mostly unchanged)
+      // --------------------------
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      const scoreText = document.getElementById("score");
+      const instructionText = document.getElementById("instruction");
+
+      let dpr = window.devicePixelRatio || 1;
+      function resizeCanvas() {
+        canvas.style.width = "100vw";
+        canvas.style.height = "100vh";
+        canvas.width = window.innerWidth * dpr;
+        canvas.height = window.innerHeight * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+      resizeCanvas();
+      window.addEventListener("resize", resizeCanvas);
+
+      // --- SVG Assets ---
+      // (Replace the placeholder comments below with your full SVG strings)
+      const arrowShortSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="598" height="690" viewBox="0 0 598 690" fill="none">
+  <rect x="276" y="644" width="46" height="46" fill="#34AC80"/>
+  <rect x="322" y="598" width="46" height="46" fill="#34AC80"/>
+  <rect x="276" y="552" width="46" height="46" fill="#34AC80"/>
+  <rect x="276" y="460" width="46" height="46" fill="#34AC80"/>
+  <rect x="276" y="506" width="46" height="46" fill="#4BEA69"/>
+  <rect x="230" y="552" width="46" height="46" fill="#4BEA69"/>
+  <rect x="230" y="506" width="46" height="46" fill="#4BEA69"/>
+  <rect x="230" y="460" width="46" height="46" fill="#4BEA69"/>
+  <rect x="322" y="552" width="46" height="46" fill="#4BEA69"/>
+  <rect x="322" y="506" width="46" height="46" fill="#4BEA69"/>
+  <rect x="322" y="460" width="46" height="46" fill="#4BEA69"/>
+  <rect x="276" y="368" width="46" height="46" fill="#34AC80"/>
+  <rect x="276" y="276" width="46" height="46" fill="#34AC80"/>
+  <rect x="276" y="322" width="46" height="46" fill="#4BEA69"/>
+  <rect x="230" y="368" width="46" height="46" fill="#4BEA69"/>
+  <rect x="230" y="322" width="46" height="46" fill="#4BEA69"/>
+  <rect x="230" y="276" width="46" height="46" fill="#4BEA69"/>
+  <rect x="322" y="368" width="46" height="46" fill="#4BEA69"/>
+  <rect x="322" y="322" width="46" height="46" fill="#4BEA69"/>
+  <rect x="322" y="276" width="46" height="46" fill="#4BEA69"/>
+  <rect x="230" y="598" width="46" height="46" fill="#34AC80"/>
+  <rect x="276" y="598" width="46" height="46" fill="#0B5027"/>
+  <rect x="322" y="414" width="46" height="46" fill="#34AC80"/>
+  <rect x="230" y="414" width="46" height="46" fill="#34AC80"/>
+  <rect x="276" y="414" width="46" height="46" fill="#0B5027"/>
+  <rect x="276" y="184" width="46" height="46" fill="#34AC80"/>
+  <rect x="230" y="184" width="46" height="46" fill="#4BEA69"/>
+  <rect x="322" y="184" width="46" height="46" fill="#4BEA69"/>
+  <rect x="322" y="230" width="46" height="46" fill="#34AC80"/>
+  <rect x="230" y="230" width="46" height="46" fill="#34AC80"/>
+  <rect x="276" y="230" width="46" height="46" fill="#0B5027"/>
+  <rect x="276" y="92" width="46" height="46" fill="#34AC80"/>
+  <rect x="276" y="138" width="46" height="46" fill="#4BEA69"/>
+  <rect x="230" y="138" width="46" height="46" fill="#4BEA69"/>
+  <rect x="230" y="92" width="46" height="46" fill="#4BEA69"/>
+  <rect x="322" y="138" width="46" height="46" fill="#4BEA69"/>
+  <rect x="322" y="92" width="46" height="46" fill="#4BEA69"/>
+  <rect x="460" y="276" width="46" height="46" fill="#4BEA69"/>
+  <rect x="460" y="230" width="46" height="46" fill="#4BEA69"/>
+  <rect x="414" y="230" width="46" height="46" fill="#4BEA69"/>
+  <rect x="368" y="230" width="46" height="46" fill="#4BEA69"/>
+  <rect x="368" y="184" width="46" height="46" fill="#4BEA69"/>
+  <rect x="460" y="184" width="46" height="46" fill="#4BEA69"/>
+  <rect x="506" y="368" width="46" height="46" fill="#4BEA69"/>
+  <rect x="552" y="322" width="46" height="46" fill="#4BEA69"/>
+  <rect x="506" y="322" width="46" height="46" fill="#4BEA69"/>
+  <rect x="506" y="276" width="46" height="46" fill="#4BEA69"/>
+  <rect x="368" y="92" width="46" height="46" fill="#4BEA69"/>
+  <rect x="276" width="46" height="46" fill="#34AC80"/>
+  <rect x="322" y="46" width="46" height="46" fill="#34AC80"/>
+  <rect x="368" y="138" width="46" height="46" fill="#34AC80"/>
+  <rect x="414" y="184" width="46" height="46" fill="#34AC80"/>
+  <rect x="414" y="276" width="46" height="46" fill="#34AC80"/>
+  <rect x="506" y="230" width="46" height="46" fill="#34AC80"/>
+  <rect x="460" y="322" width="46" height="46" fill="#34AC80"/>
+  <rect x="552" y="276" width="46" height="46" fill="#34AC80"/>
+  <rect x="230" y="46" width="46" height="46" fill="#34AC80"/>
+  <rect x="276" y="46" width="46" height="46" fill="#0B5027"/>
+  <rect x="414" y="138" width="46" height="46" fill="#0B5027"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 138 276)" fill="#4BEA69"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 138 230)" fill="#4BEA69"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 184 230)" fill="#4BEA69"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 230 230)" fill="#4BEA69"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 230 184)" fill="#4BEA69"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 138 184)" fill="#4BEA69"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 92 368)" fill="#4BEA69"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 46 322)" fill="#4BEA69"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 92 322)" fill="#4BEA69"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 92 276)" fill="#4BEA69"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 230 92)" fill="#4BEA69"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 230 138)" fill="#34AC80"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 184 184)" fill="#34AC80"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 184 276)" fill="#34AC80"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 92 230)" fill="#34AC80"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 138 322)" fill="#34AC80"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 46 276)" fill="#34AC80"/>
+  <rect width="46" height="46" transform="matrix(-1 0 0 1 184 138)" fill="#0B5027"/>
+</svg>`;
+
+      const arrowMediumSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="598" height="874" viewBox="0 0 598 874" fill="none">
+<rect x="276" y="644" width="46" height="46" fill="#34AC80"/>
+<rect x="322" y="598" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="552" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="460" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="506" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="552" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="506" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="460" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="552" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="506" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="460" width="46" height="46" fill="#4BEA69"/>
+<rect x="276" y="368" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="276" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="322" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="368" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="322" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="276" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="368" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="322" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="276" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="598" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="598" width="46" height="46" fill="#0B5027"/>
+<rect x="276" y="828" width="46" height="46" fill="#34AC80"/>
+<rect x="322" y="782" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="736" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="690" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="736" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="690" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="644" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="736" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="690" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="644" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="782" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="782" width="46" height="46" fill="#0B5027"/>
+<rect x="322" y="414" width="46" height="46" fill="#34AC80"/>
+<rect x="230" y="414" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="414" width="46" height="46" fill="#0B5027"/>
+<rect x="276" y="184" width="46" height="46" fill="#34AC80"/>
+<rect x="230" y="184" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="184" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="230" width="46" height="46" fill="#34AC80"/>
+<rect x="230" y="230" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="230" width="46" height="46" fill="#0B5027"/>
+<rect x="276" y="92" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="138" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="138" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="92" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="138" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="92" width="46" height="46" fill="#4BEA69"/>
+<rect x="460" y="276" width="46" height="46" fill="#4BEA69"/>
+<rect x="460" y="230" width="46" height="46" fill="#4BEA69"/>
+<rect x="414" y="230" width="46" height="46" fill="#4BEA69"/>
+<rect x="368" y="230" width="46" height="46" fill="#4BEA69"/>
+<rect x="368" y="184" width="46" height="46" fill="#4BEA69"/>
+<rect x="460" y="184" width="46" height="46" fill="#4BEA69"/>
+<rect x="506" y="368" width="46" height="46" fill="#4BEA69"/>
+<rect x="552" y="322" width="46" height="46" fill="#4BEA69"/>
+<rect x="506" y="322" width="46" height="46" fill="#4BEA69"/>
+<rect x="506" y="276" width="46" height="46" fill="#4BEA69"/>
+<rect x="368" y="92" width="46" height="46" fill="#4BEA69"/>
+<rect x="276" width="46" height="46" fill="#34AC80"/>
+<rect x="322" y="46" width="46" height="46" fill="#34AC80"/>
+<rect x="368" y="138" width="46" height="46" fill="#34AC80"/>
+<rect x="414" y="184" width="46" height="46" fill="#34AC80"/>
+<rect x="414" y="276" width="46" height="46" fill="#34AC80"/>
+<rect x="506" y="230" width="46" height="46" fill="#34AC80"/>
+<rect x="460" y="322" width="46" height="46" fill="#34AC80"/>
+<rect x="552" y="276" width="46" height="46" fill="#34AC80"/>
+<rect x="230" y="46" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="46" width="46" height="46" fill="#0B5027"/>
+<rect x="414" y="138" width="46" height="46" fill="#0B5027"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 138 276)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 138 230)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 184 230)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 230 230)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 230 184)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 138 184)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 92 368)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 46 322)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 92 322)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 92 276)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 230 92)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 230 138)" fill="#34AC80"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 184 184)" fill="#34AC80"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 184 276)" fill="#34AC80"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 92 230)" fill="#34AC80"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 138 322)" fill="#34AC80"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 46 276)" fill="#34AC80"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 184 138)" fill="#0B5027"/>
+</svg>`;
+
+      const arrowLargeSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="598" height="1058" viewBox="0 0 598 1058" fill="none">
+<rect x="276" y="644" width="46" height="46" fill="#34AC80"/>
+<rect x="322" y="598" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="552" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="460" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="506" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="552" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="506" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="460" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="552" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="506" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="460" width="46" height="46" fill="#4BEA69"/>
+<rect x="276" y="368" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="276" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="322" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="368" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="322" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="276" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="368" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="322" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="276" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="598" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="598" width="46" height="46" fill="#0B5027"/>
+<rect x="276" y="828" width="46" height="46" fill="#34AC80"/>
+<rect x="322" y="782" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="736" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="690" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="736" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="690" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="644" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="736" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="690" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="644" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="782" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="782" width="46" height="46" fill="#0B5027"/>
+<rect x="276" y="1012" width="46" height="46" fill="#34AC80"/>
+<rect x="322" y="966" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="920" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="874" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="920" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="874" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="828" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="920" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="874" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="828" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="966" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="966" width="46" height="46" fill="#0B5027"/>
+<rect x="322" y="414" width="46" height="46" fill="#34AC80"/>
+<rect x="230" y="414" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="414" width="46" height="46" fill="#0B5027"/>
+<rect x="276" y="184" width="46" height="46" fill="#34AC80"/>
+<rect x="230" y="184" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="184" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="230" width="46" height="46" fill="#34AC80"/>
+<rect x="230" y="230" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="230" width="46" height="46" fill="#0B5027"/>
+<rect x="276" y="92" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="138" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="138" width="46" height="46" fill="#4BEA69"/>
+<rect x="230" y="92" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="138" width="46" height="46" fill="#4BEA69"/>
+<rect x="322" y="92" width="46" height="46" fill="#4BEA69"/>
+<rect x="460" y="276" width="46" height="46" fill="#4BEA69"/>
+<rect x="460" y="230" width="46" height="46" fill="#4BEA69"/>
+<rect x="414" y="230" width="46" height="46" fill="#4BEA69"/>
+<rect x="368" y="230" width="46" height="46" fill="#4BEA69"/>
+<rect x="368" y="184" width="46" height="46" fill="#4BEA69"/>
+<rect x="460" y="184" width="46" height="46" fill="#4BEA69"/>
+<rect x="506" y="368" width="46" height="46" fill="#4BEA69"/>
+<rect x="552" y="322" width="46" height="46" fill="#4BEA69"/>
+<rect x="506" y="322" width="46" height="46" fill="#4BEA69"/>
+<rect x="506" y="276" width="46" height="46" fill="#4BEA69"/>
+<rect x="368" y="92" width="46" height="46" fill="#4BEA69"/>
+<rect x="276" width="46" height="46" fill="#34AC80"/>
+<rect x="322" y="46" width="46" height="46" fill="#34AC80"/>
+<rect x="368" y="138" width="46" height="46" fill="#34AC80"/>
+<rect x="414" y="184" width="46" height="46" fill="#34AC80"/>
+<rect x="414" y="276" width="46" height="46" fill="#34AC80"/>
+<rect x="506" y="230" width="46" height="46" fill="#34AC80"/>
+<rect x="460" y="322" width="46" height="46" fill="#34AC80"/>
+<rect x="552" y="276" width="46" height="46" fill="#34AC80"/>
+<rect x="230" y="46" width="46" height="46" fill="#34AC80"/>
+<rect x="276" y="46" width="46" height="46" fill="#0B5027"/>
+<rect x="414" y="138" width="46" height="46" fill="#0B5027"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 138 276)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 138 230)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 184 230)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 230 230)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 230 184)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 138 184)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 92 368)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 46 322)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 92 322)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 92 276)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 230 92)" fill="#4BEA69"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 230 138)" fill="#34AC80"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 184 184)" fill="#34AC80"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 184 276)" fill="#34AC80"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 92 230)" fill="#34AC80"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 138 322)" fill="#34AC80"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 46 276)" fill="#34AC80"/>
+<rect width="46" height="46" transform="matrix(-1 0 0 1 184 138)" fill="#0B5027"/>
+</svg>`;
+
+      // Create Image objects for the SVG arrows.
+      function createSVGImage(svgString) {
+        const img = new Image();
+        img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgString);
+        return img;
+      }
+
+      // Create arrow images once.
+      let arrowShortImg = createSVGImage(arrowShortSVG);
+      let arrowMediumImg = createSVGImage(arrowMediumSVG);
+      let arrowLargeImg = createSVGImage(arrowLargeSVG);
+      let arrowShortLoaded = false,
+        arrowMediumLoaded = false,
+        arrowLargeLoaded = false;
+      arrowShortImg.onload = () => {
+        arrowShortLoaded = true;
+      };
+      arrowMediumImg.onload = () => {
+        arrowMediumLoaded = true;
+      };
+      arrowLargeImg.onload = () => {
+        arrowLargeLoaded = true;
+      };
+
+      const DRAG_THRESHOLD_MEDIUM = 35;
+      const DRAG_THRESHOLD_LARGE = 70;
+      const MAX_VELOCITY = 3000;
+
+      let gameOver = false;
+      let score = 0;
+      let cameraOffsetY = 0;
+      let startY = 0;
+      let highestY = 0;
+
+      const player = {
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        angle: 0,
+        baseSize: 20,
+        onPlatform: true,
+        attachedPlatform: null,
+      };
+
+      function createPlatform(x, y, width, moving = false, vx = 0) {
+        return { x, y, width, height: 10, moving, vx };
+      }
+
+      let platforms = [];
+      function initPlayerAndPlatform() {
+        player.x = canvas.width / dpr / 2;
+        player.y = canvas.height / dpr - 200;
+        player.attachedPlatform = null;
+        startY = player.y;
+        highestY = player.y;
+        const initialPlatformWidth = 100;
+        const initialPlatformX = (canvas.width / dpr - initialPlatformWidth) / 2;
+        const initialPlatformY = player.y;
+        platforms = [];
+        platforms.push(createPlatform(initialPlatformX, initialPlatformY, initialPlatformWidth));
+      }
+
+      function generateInitialPlatforms() {
+        let gap = 80 + score / 200;
+        let y = platforms[0].y - gap;
+        while (y > 20) {
+          const width = Math.max(40, 100 - score / 100);
+          const x = Math.random() * (canvas.width / dpr - width);
+          platforms.push(createPlatform(x, y, width));
+          y -= gap;
+        }
+      }
+
+      function generatePlatforms() {
+        const offScreenPlatforms = platforms.filter((p) => p.y < cameraOffsetY);
+        let highestPlatformY =
+          offScreenPlatforms.length > 0 ? Math.min(...offScreenPlatforms.map((p) => p.y)) : cameraOffsetY;
+        while (highestPlatformY > cameraOffsetY - 300) {
+          highestPlatformY -= 80 + score / 200;
+          const width = Math.max(40, 100 - score / 100);
+          const x = Math.random() * (canvas.width / dpr - width);
+          if (score >= 2500 && Math.random() < 0.1) {
+            const vx = (Math.random() < 0.5 ? -1 : 1) * (50 + Math.random() * 50);
+            platforms.push(createPlatform(x, highestPlatformY, width, true, vx));
+          } else {
+            platforms.push(createPlatform(x, highestPlatformY, width));
+          }
+        }
+      }
+
+      let particles = [];
+      function createParticle(x, y) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 300 + 1;
+        return {
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 0.35,
+          maxLife: 0.35,
+        };
+      }
+      function spawnParticles(x, y, count) {
+        for (let i = 0; i < count; i++) {
+          particles.push(createParticle(x, y));
+        }
+      }
+
+      // Drag Handling
+      let isDragging = false;
+      let dragStart = null;
+      let dragCurrent = null;
+      function getPointerWorldPos(e) {
+        const rect = canvas.getBoundingClientRect();
+        let clientX, clientY;
+        if (e.touches && e.touches.length) {
+          clientX = e.touches[0].clientX;
+          clientY = e.touches[0].clientY;
+        } else {
+          clientX = e.clientX;
+          clientY = e.clientY;
+        }
+        const x = (clientX - rect.left) * dpr;
+        const y = (clientY - rect.top) * dpr + cameraOffsetY;
+        return { x, y };
+      }
+      function startDrag(e) {
+        if (gameOver || !player.onPlatform) return;
+        const pointer = getPointerWorldPos(e);
+        isDragging = true;
+        dragStart = { x: pointer.x, y: pointer.y };
+        dragCurrent = { x: pointer.x, y: pointer.y };
+      }
+      function dragMove(e) {
+        if (!isDragging) return;
+        dragCurrent = getPointerWorldPos(e);
+      }
+      function endDrag(e) {
+        if (!isDragging) return;
+        isDragging = false;
+        const dx = dragStart.x - dragCurrent.x;
+        const dy = dragStart.y - dragCurrent.y;
+        const magnitude = Math.hypot(dx, dy);
+        if (magnitude < 10) return;
+        let power = /Mobi|Android/i.test(navigator.userAgent) ? 10 : 20;
+        let vx = dx * power;
+        let vy = dy * power;
+        const velMag = Math.hypot(vx, vy);
+        if (velMag > MAX_VELOCITY) {
+          const scale = MAX_VELOCITY / velMag;
+          vx *= scale;
+          vy *= scale;
+        }
+        player.vx = vx;
+        player.vy = vy;
+        player.angle = Math.atan2(player.vy, player.vx);
+        player.onPlatform = false;
+        player.attachedPlatform = null;
+        spawnParticles(player.x, player.y, 20);
+        instructionText.style.display = "none";
+        window.FarcadeSDK.singlePlayer.actions.hapticFeedback();
+      }
+
+      canvas.addEventListener("mousedown", startDrag);
+      canvas.addEventListener("touchstart", (e) => {
+        startDrag(e);
+        e.preventDefault();
+      });
+      canvas.addEventListener("mousemove", dragMove);
+      canvas.addEventListener("touchmove", (e) => {
+        dragMove(e);
+        e.preventDefault();
+      });
+      canvas.addEventListener("mouseup", endDrag);
+      canvas.addEventListener("touchend", (e) => {
+        endDrag(e);
+        e.preventDefault();
+      });
+
+      function resetGame() {
+        gameOver = false;
+        score = 0;
+        cameraOffsetY = 0;
+        initPlayerAndPlatform();
+        player.vx = 0;
+        player.vy = 0;
+        player.angle = 0;
+        player.onPlatform = true;
+        player.attachedPlatform = null;
+        particles = [];
+        generateInitialPlatforms();
+        generatePlatforms();
+        instructionText.style.display = "block";
+        lastTime = performance.now();
+        requestAnimationFrame(loop);
+      }
+
+      initPlayerAndPlatform();
+      generateInitialPlatforms();
+      generatePlatforms();
+
+      window.FarcadeSDK.on("play_again", () => {
+        resetGame();
+      });
+      window.FarcadeSDK.on("toggle_mute", (data) => {
+        console.log("Audio toggled. Muted:", data.isMuted);
+      });
+
+      let lastTime = performance.now();
+      const gravity = 3000;
+
+      function loop(currentTime) {
+        const dt = (currentTime - lastTime) / 1000;
+        lastTime = currentTime;
+        update(dt);
+        draw();
+        if (!gameOver) requestAnimationFrame(loop);
+      }
+
+      function update(dt) {
+        if (!player.onPlatform) {
+          const oldY = player.y;
+          player.vy += gravity * dt;
+          player.x += player.vx * dt;
+          player.y += player.vy * dt;
+
+          const arrowWidth = 25;
+          if (player.x < arrowWidth) {
+            player.x = arrowWidth;
+            player.vx = -player.vx * 0.8;
+            player.angle = Math.atan2(player.vy, player.vx);
+            spawnParticles(player.x, player.y, 10);
+          } else if (player.x > canvas.width / dpr - arrowWidth) {
+            player.x = canvas.width / dpr - arrowWidth;
+            player.vx = -player.vx * 0.8;
+            player.angle = Math.atan2(player.vy, player.vx);
+            spawnParticles(player.x, player.y, 10);
+          }
+
+          if (player.vy > 0) {
+            for (let plat of platforms) {
+              const platTop = plat.y;
+              if (oldY <= platTop && player.y >= platTop) {
+                if (player.x > plat.x && player.x < plat.x + plat.width) {
+                  player.y = platTop;
+                  player.vx = 0;
+                  player.vy = 0;
+                  player.onPlatform = true;
+                  spawnParticles(player.x, platTop, 15);
+                  player.attachedPlatform = plat.moving ? plat : null;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        if (player.onPlatform && player.attachedPlatform) {
+          player.x += player.attachedPlatform.vx * dt;
+        }
+
+        for (let plat of platforms) {
+          if (plat.moving) {
+            plat.x += plat.vx * dt;
+            if (plat.x < 0 || plat.x + plat.width > canvas.width / dpr) {
+              plat.vx = -plat.vx;
+              plat.x = Math.max(0, Math.min(plat.x, canvas.width / dpr - plat.width));
+            }
+          }
+        }
+
+        const screenCenterY = canvas.height / (2 * dpr);
+        if (player.y - cameraOffsetY < screenCenterY) {
+          cameraOffsetY = player.y - screenCenterY;
+        }
+        if (player.y - cameraOffsetY > canvas.height / dpr || player.y - cameraOffsetY < 0) {
+          gameOver = true;
+          window.FarcadeSDK.singlePlayer.actions.gameOver({ score: score });
+        }
+        if (player.y < highestY) highestY = player.y;
+        score = Math.floor(startY - highestY);
+        scoreText.textContent = "Score: " + score;
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.life -= dt;
+          if (p.life <= 0) particles.splice(i, 1);
+        }
+
+        if (!player.onPlatform) {
+          player.angle = Math.atan2(player.vy, player.vx);
+        }
+        if (player.onPlatform && player.y - cameraOffsetY > startY) {
+          const targetCameraOffset = player.y - startY;
+          cameraOffsetY = lerp(cameraOffsetY, targetCameraOffset, 0.1);
+        }
+
+        generatePlatforms();
+        platforms = platforms.filter((p) => p.y < cameraOffsetY + canvas.height / dpr);
+      }
+
+      function draw() {
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--bg-color");
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.translate(0, -cameraOffsetY);
+
+        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--platform-color");
+        platforms.forEach((plat) => {
+          ctx.fillRect(plat.x, plat.y, plat.width, plat.height);
+        });
+
+        let selectedImage;
+        if (isDragging) {
+          const dx = dragStart.x - dragCurrent.x;
+          const dy = dragStart.y - dragCurrent.y;
+          const dragMag = Math.hypot(dx, dy);
+          if (dragMag < DRAG_THRESHOLD_MEDIUM) {
+            selectedImage = arrowShortImg;
+          } else if (dragMag < DRAG_THRESHOLD_LARGE) {
+            selectedImage = arrowMediumImg;
+          } else {
+            selectedImage = arrowLargeImg;
+          }
+        } else {
+          selectedImage = arrowShortImg;
+        }
+        let imageLoaded = false;
+        if (selectedImage === arrowShortImg) imageLoaded = arrowShortLoaded;
+        else if (selectedImage === arrowMediumImg) imageLoaded = arrowMediumLoaded;
+        else if (selectedImage === arrowLargeImg) imageLoaded = arrowLargeLoaded;
+
+        if (imageLoaded) {
+          ctx.save();
+          ctx.translate(player.x, player.y);
+          let drawAngle;
+          if (isDragging) {
+            const dx = dragStart.x - dragCurrent.x;
+            const dy = dragStart.y - dragCurrent.y;
+            const dragMag = Math.hypot(dx, dy);
+            drawAngle =
+              dragMag < 5 ? 0 : Math.atan2(dragStart.y - dragCurrent.y, dragStart.x - dragCurrent.x) + Math.PI / 2;
+          } else if (player.onPlatform) {
+            drawAngle = 0;
+          } else {
+            drawAngle = player.angle + Math.PI / 2;
+          }
+          ctx.rotate(drawAngle);
+          const targetWidth = 50;
+          const baseScale = targetWidth / selectedImage.width;
+          ctx.scale(baseScale, baseScale);
+          let offset =
+            isDragging && selectedImage !== arrowShortImg
+              ? -((arrowShortImg.height * selectedImage.width) / arrowShortImg.width)
+              : -selectedImage.height;
+          ctx.drawImage(selectedImage, -selectedImage.width / 2, offset);
+          ctx.restore();
+        }
+        particles.forEach((p) => {
+          const alpha = p.life / p.maxLife;
+          const particleRGB = getComputedStyle(document.documentElement).getPropertyValue("--particle-color");
+          ctx.fillStyle = `rgba(${particleRGB}, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.restore();
+      }
+
+      // --------------------------
+      // Theme Animation Code
+      // --------------------------
+      const colorThemes = [
+        // Green (start)
+        {
+          bgColor: "#091c1e",
+          platformColor: "#4BEA69",
+          particleColor: "75, 234, 105",
+          arrowPrimary: "#34AC80",
+          arrowSecondary: "#4BEA69",
+          arrowAccent: "#0B5027",
+        },
+        // Blue (3000)
+        {
+          bgColor: "#051a2e",
+          platformColor: "#4B8AEA",
+          particleColor: "75, 138, 234",
+          arrowPrimary: "#3469AC",
+          arrowSecondary: "#4B8AEA",
+          arrowAccent: "#0B2750",
+        },
+        // Indigo (6000)
+        {
+          bgColor: "#130a36",
+          platformColor: "#7C4BEA",
+          particleColor: "124, 75, 234",
+          arrowPrimary: "#5834AC",
+          arrowSecondary: "#7C4BEA",
+          arrowAccent: "#1F0B50",
+        },
+        // Violet (9000)
+        {
+          bgColor: "#2e0533",
+          platformColor: "#D44BEA",
+          particleColor: "212, 75, 234",
+          arrowPrimary: "#A434AC",
+          arrowSecondary: "#D44BEA",
+          arrowAccent: "#500B50",
+        },
+        // Red (12000)
+        {
+          bgColor: "#350505",
+          platformColor: "#EA4B4B",
+          particleColor: "234, 75, 75",
+          arrowPrimary: "#AC3434",
+          arrowSecondary: "#EA4B4B",
+          arrowAccent: "#500B0B",
+        },
+        // Orange (15000)
+        {
+          bgColor: "#361a05",
+          platformColor: "#EA9A4B",
+          particleColor: "234, 154, 75",
+          arrowPrimary: "#AC7234",
+          arrowSecondary: "#EA9A4B",
+          arrowAccent: "#502d0B",
+        },
+        // Yellow (18000)
+        {
+          bgColor: "#2e2e05",
+          platformColor: "#EAE44B",
+          particleColor: "234, 228, 75",
+          arrowPrimary: "#ACAA34",
+          arrowSecondary: "#EAE44B",
+          arrowAccent: "#50500B",
+        },
+      ];
+
+      const THEME_SCORE_GAP = 3000;
+      const THEME_CYCLE_LENGTH = colorThemes.length * THEME_SCORE_GAP;
+
+      let currentTheme = { ...colorThemes[0] };
+      let currentThemeIndex = 0;
+      let isAnimatingTheme = false;
+      let lastSVGUpdateTime = 0;
+
+      function getCSSVariable(varName) {
+        return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+      }
+
+      // Reuse the arrow images by updating their src.
+      function updateSVGImages() {
+        const arrowPrimary = getCSSVariable("--arrow-primary");
+        const arrowSecondary = getCSSVariable("--arrow-secondary");
+        const arrowAccent = getCSSVariable("--arrow-accent");
+
+        function replaceColors(svg) {
+          return svg
+            .replace(/#34AC80/g, arrowPrimary)
+            .replace(/#4BEA69/g, arrowSecondary)
+            .replace(/#0B5027/g, arrowAccent);
+        }
+        const newShortSrc = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(replaceColors(arrowShortSVG));
+        const newMediumSrc = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(replaceColors(arrowMediumSVG));
+        const newLargeSrc = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(replaceColors(arrowLargeSVG));
+
+        if (arrowShortImg.src !== newShortSrc) arrowShortImg.src = newShortSrc;
+        if (arrowMediumImg.src !== newMediumSrc) arrowMediumImg.src = newMediumSrc;
+        if (arrowLargeImg.src !== newLargeSrc) arrowLargeImg.src = newLargeSrc;
+      }
+
+      function updateThemeBasedOnScore(score) {
+        const normalizedScore = score % THEME_CYCLE_LENGTH;
+        const targetThemeIndex = Math.floor(normalizedScore / THEME_SCORE_GAP);
+        if (targetThemeIndex !== currentThemeIndex && !isAnimatingTheme) {
+          currentThemeIndex = targetThemeIndex;
+          const targetTheme = colorThemes[currentThemeIndex];
+          isAnimatingTheme = true;
+          // Change duration from 2000ms to 1000ms for faster transition.
+          animateThemeTransition(targetTheme, 1000, () => {
+            isAnimatingTheme = false;
+          });
+        }
+      }
+
+      function animateThemeTransition(targetTheme, duration, callback) {
+        const startTime = performance.now();
+        const initialTheme = { ...currentTheme };
+        function step(now) {
+          const t = Math.min((now - startTime) / duration, 1);
+          const interpolatedTheme = {};
+          for (const key in targetTheme) {
+            if (targetTheme[key].charAt(0) === "#") {
+              const startRgb = hexToRgb(initialTheme[key]);
+              const targetRgb = hexToRgb(targetTheme[key]);
+              const r = Math.round(lerp(startRgb.r, targetRgb.r, t));
+              const g = Math.round(lerp(startRgb.g, targetRgb.g, t));
+              const b = Math.round(lerp(startRgb.b, targetRgb.b, t));
+              interpolatedTheme[key] = rgbToHex({ r, g, b });
+            } else {
+              const startParts = initialTheme[key].split(",").map((x) => parseInt(x.trim()));
+              const targetParts = targetTheme[key].split(",").map((x) => parseInt(x.trim()));
+              const r = Math.round(lerp(startParts[0], targetParts[0], t));
+              const g = Math.round(lerp(startParts[1], targetParts[1], t));
+              const b = Math.round(lerp(startParts[2], targetParts[2], t));
+              interpolatedTheme[key] = `${r}, ${g}, ${b}`;
+            }
+          }
+          document.documentElement.style.setProperty("--bg-color", interpolatedTheme.bgColor);
+          document.documentElement.style.setProperty("--platform-color", interpolatedTheme.platformColor);
+          document.documentElement.style.setProperty("--particle-color", interpolatedTheme.particleColor);
+          document.documentElement.style.setProperty("--arrow-primary", interpolatedTheme.arrowPrimary);
+          document.documentElement.style.setProperty("--arrow-secondary", interpolatedTheme.arrowSecondary);
+          document.documentElement.style.setProperty("--arrow-accent", interpolatedTheme.arrowAccent);
+          currentTheme = interpolatedTheme;
+          if (now - lastSVGUpdateTime > 100) {
+            updateSVGImages();
+            lastSVGUpdateTime = now;
+          }
+          if (t < 1) {
+            requestAnimationFrame(step);
+          } else {
+            if (callback) callback();
+          }
+        }
+        requestAnimationFrame(step);
+      }
+
+      // Update the game to check for theme changes.
+      const originalUpdate = update;
+      update = function (dt) {
+        originalUpdate(dt);
+        updateThemeBasedOnScore(score);
+      };
+
+      window.FarcadeSDK.singlePlayer.actions.ready();
+      requestAnimationFrame(loop);
+      resetGame();
+    </script>
+  </body>
+</html>

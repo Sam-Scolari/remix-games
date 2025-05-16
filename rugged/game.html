@@ -1,0 +1,1901 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Rugged - A Crash-inspired Game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Russo+One&display=swap" rel="stylesheet">
+    <style>
+      /* Full viewport with dark green background and white text */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100vw;
+        height: 100vh;
+        font-family: "Russo One", sans-serif;
+        background-color: #0B351E;
+        color: #ffffff;
+        letter-spacing: 0.05em;
+        transition: background-color 0.3s ease;
+      }
+
+      /* Main container using flexbox for layout */
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        overflow: hidden;
+      }
+
+      /* Portfolio wrapper */
+      #portfolioWrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transform: translateY(-100%);
+        opacity: 0;
+        transition: transform 1.5s ease, opacity 1.5s ease;
+      }
+
+      #portfolioWrapper.show {
+        transform: translateY(0);
+        opacity: 1;
+      }
+
+      #portfolioWrapper.crash {
+        transform: translateY(-100%);
+        opacity: 0;
+        transition: none;
+      }
+
+      #chains {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        width: 100px;
+      }
+
+      #left-chain, #right-chain {
+        width: 9px;
+        height: 20px;
+        background-color: #46C446;
+        transition: background-color 0.3s ease;
+      }
+
+      /* Portfolio container at the top */
+      #portfolioContainer {
+        padding: 12px 20px;
+        text-align: center;
+        flex-shrink: 0;
+        display: inline-block;
+        background-color: inherit;
+        border-radius: 8px;
+        border-bottom: 3px solid #46C446;
+        margin: 0 0 4px 0;
+        transition: all 0.3s ease;
+        width: 140px;
+      }
+
+      #portfolioValue {
+        font-size: 32px;
+        font-weight: 400;
+        color: #2D732D;
+        transition: color 0.3s ease;
+        margin-bottom: 2px;
+      }
+
+      /* Chart container takes remaining space */
+      #chartContainer {
+        flex: 1;
+        min-height: 0;
+        position: relative;
+        width: 100%;
+        background-color: inherit;
+        margin-bottom: 20px;
+      }
+
+      /* Canvas fills chart container */
+      #chartCanvas {
+        width: 100%;
+        height: 100%;
+        background-color: inherit;
+      }
+
+      /* Gradient overlay for chart */
+      #chartGradient {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 100px;
+        pointer-events: none;
+        opacity: 0;
+        background: linear-gradient(to top, #440E0D 0%, transparent 100%);
+      }
+
+      #chartGradient.show {
+        opacity: 1;
+      }
+
+      /* Market cap text overlay */
+      #marketCapText {
+        font-size: 12px;
+        background-color: inherit;
+        padding: 0;
+        margin: 0;
+        letter-spacing: 0.1em;
+        text-align: center;
+        color: #2D732D;
+        transition: color 0.3s ease;
+        white-space: nowrap;
+      }
+
+      /* Rugged message styling */
+      #ruggedMessage {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 100;
+        display: none;
+        width: 300px;
+        filter: drop-shadow(0 0 15px #440E0D)
+        drop-shadow(0 0 15px #440E0D)drop-shadow(0 0 15px #440E0D);
+      }
+
+      #ruggedMessage svg {
+        width: 100%;
+        height: 100%;
+      }
+
+      #ruggedInfo {
+        color: #FF5237;
+        font-family: "Russo One", sans-serif;
+        font-size: 18px;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        filter: drop-shadow(0 0 15px #440E0D);
+      }
+
+      /* Controls container at the bottom */
+      #controls {
+        padding: 0 12px 16px 12px;
+        flex-shrink: 0;
+        width: calc(100% - 24px);
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box;
+        gap: 20px;
+        background-color: inherit;
+        transform: translateY(100%);
+        opacity: 0;
+        transition: transform 1.5s ease, opacity 1.5s ease;
+      }
+
+      #controls.show {
+        transform: translateY(0);
+        opacity: 1;
+      }
+
+      #controls.crash {
+        transform: translateY(100%);
+        opacity: 0;
+        transition: none;
+      }
+
+      /* Action button styling */
+      #actionButton {
+        padding: 16px;
+        font-size: 20px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        box-sizing: border-box;
+        font-family: "Russo One", sans-serif;
+        letter-spacing: 0.1em;
+        background-color: transparent;
+        text-transform: uppercase;
+        color: #2D732D;
+      }
+
+      /* Add new styles for the control buttons */
+      #controls .button-group {
+        display: flex;
+        width: 100%;
+      }
+
+      #halfButton, #actionButton, #doubleButton, #sellButton {
+        background-color: #57E057;
+        color: #2D732D;
+        border: none;
+        font-family: "Russo One", sans-serif;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        font-size: 18px;
+        cursor: pointer;
+        padding: 20px;
+        text-align: center;
+        border-bottom: 3px solid #46C446;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+        height: 60px;
+      }
+
+      #halfButton {
+        width: 60px;
+        border-radius: 8px 0 0 8px;
+        border-right: 1.5px solid #46C446;
+      }
+
+      #doubleButton {
+        width: 60px;
+        border-radius: 0 8px 8px 0;
+        border-left: 1.5px solid #46C446;
+      }
+
+      #actionButton {
+        flex: 1;
+        border-left: 1.5px solid #46C446;
+        border-right: 1.5px solid #46C446;
+      }
+
+      #sellButton {
+        flex: 1;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        width: 100%;
+      }
+
+      #actionLabel {
+        text-align: left;
+        font-weight: bold;
+      }
+
+      /* Price Impact display */
+      #priceImpactContainer {
+        font-size: 10px;
+        margin-top: 4px;
+        color: #57E057;
+        text-align: right;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        gap: 4px;
+        transition: color 0.3s ease;
+        opacity: 0;
+        transition: opacity 1.5s ease;
+      }
+
+      #priceImpactContainer.show {
+        opacity: 1;
+      }
+
+      #priceImpactLabel, #priceImpactValue {
+        margin-left: 0;
+        font-weight: 400;
+        transition: color 0.3s ease;
+      }
+
+      #cashOutButton {
+        padding: 12px 16px;
+        font-size: 14px;
+        background-color: #FFC037;
+        color: #AF7800;
+        border: none;
+        border-radius: 8px;
+        font-family: "Russo One", sans-serif;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border-bottom: 3px solid #D89400;
+        transform: translateX(200%);
+        opacity: 0;
+        position: relative;
+        right: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      #cashOutButton.show {
+        transform: translateX(0);
+        opacity: 1;
+      }
+
+      #cashOutButton:hover {
+        opacity: 0.9;
+      }
+
+      #betMultipliers {
+        display: flex;
+        justify-content: center;
+        gap: 12px;
+      }
+
+      .multiplier {
+        padding: 12px 24px;
+        font-size: 16px;
+        background-color: transparent;
+        cursor: pointer;
+        color: #fff;
+        font-family: "Russo One", sans-serif;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      /* Position info styling */
+      #positionInfo {
+        background-color: transparent;
+        padding: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      #buyButton,
+      #sellButton {
+        padding: 16px;
+        font-size: 20px;
+        cursor: pointer;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        box-sizing: border-box;
+        font-family: "Russo One", sans-serif;
+        letter-spacing: 0.1em;
+        background-color: transparent;
+        text-transform: uppercase;
+        color: #fff;
+        text-align: center;
+        width: 100%;
+      }
+
+      #buyToggle,
+      #sellToggle {
+        padding: 12px;
+        font-size: 18px;
+        cursor: pointer;
+        font-family: "Russo One", sans-serif;
+        letter-spacing: 0.1em;
+        background-color: transparent;
+        text-transform: uppercase;
+        color: #fff;
+      }
+
+      #buyToggle.active {
+        color: #00ff66;
+      }
+
+      #sellToggle.active {
+        color: #ff0000;
+      }
+
+      #placeOrderButton {
+        padding: 16px;
+        font-size: 20px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        box-sizing: border-box;
+        font-family: "Russo One", sans-serif;
+        letter-spacing: 0.1em;
+        background-color: transparent;
+        text-transform: uppercase;
+        color: #fff;
+      }
+
+      /* Add styles for B/S indicators */
+      .tradeIndicator {
+        position: absolute;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: "Russo One", sans-serif;
+        font-size: 14px;
+        z-index: 2;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+      }
+
+      .buyIndicator {
+        background-color: #57E057;
+        color: #2D732D;
+      }
+
+      .sellIndicator {
+        background-color: #FF5237;
+        color: #AC1B05;
+      }
+
+      #halfButton:hover, #actionButton:hover, #doubleButton:hover, #sellButton:hover {
+        opacity: 0.9;
+      }
+
+      #halfButton:active, #actionButton:active, #doubleButton:active {
+        opacity: 0.9;
+      }
+
+      /* Start Menu Styles */
+      #startMenu {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #0B351E;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        gap: 40px;
+      }
+
+      #startMenu img {
+        width: 60%;
+      }
+
+      #topCandles {
+        position: absolute;
+        top: 0;
+        left: 0;
+        object-fit: contain;
+        width: 150px;
+        height: auto;
+      }
+
+      #bottomCandles {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        object-fit: contain;
+        width: 150px;
+        height: auto;
+      }
+
+      #instructionsWrapper {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+      }
+
+      #instructions {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+
+        
+      }
+
+      .instruction-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: #57E057;
+        font-family: "Russo One", sans-serif;
+        font-size: 16px;
+        letter-spacing: 0.05em;
+      }
+
+      .instruction-item svg {
+        flex-shrink: 0;
+        width: 24px;
+        height: 24px;
+      }
+
+      #startButton {
+        padding: 20px 40px;
+        font-size: 24px;
+        background-color: #57E057;
+        color: #2D732D;
+        border: none;
+        border-radius: 8px;
+        font-family: "Russo One", sans-serif;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border-bottom: 3px solid #46C446;
+        position: relative;
+      }
+
+      #startButton:hover {
+        opacity: 0.9;
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@farcade/game-sdk@latest/dist/index.min.js"></script>
+  </head>
+  <body>
+    <!-- Start Menu -->
+    <div id="startMenu">
+      <img src="https://lqy3lriiybxcejon.public.blob.vercel-storage.com/QgW0om7L6HrO/Candles%20Top-yVogKRKumWK8MM3xjfb0SPaGkjt4qH.png?hVwL" alt="Top Candles" id="topCandles">
+      <img src="https://lqy3lriiybxcejon.public.blob.vercel-storage.com/QgW0om7L6HrO/rugged-green-obnuECvMui66UtvhXqnQO3vqxDHZBq.png?l2Xe" alt="RUGGED">
+      <div id="instructionsWrapper">
+        <div id="instructions">
+          <div class="instruction-item">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M7.5 5.25V6.75H9V12.75H10.5V5.25H7.5ZM9 1.5C9.98491 1.5 10.9602 1.69399 11.8701 2.0709C12.7801 2.44781 13.6069 3.00026 14.3033 3.6967C14.9997 4.39314 15.5522 5.21993 15.9291 6.12987C16.306 7.03982 16.5 8.01509 16.5 9C16.5 10.9891 15.7098 12.8968 14.3033 14.3033C12.8968 15.7098 10.9891 16.5 9 16.5C8.01509 16.5 7.03982 16.306 6.12987 15.9291C5.21993 15.5522 4.39314 14.9997 3.6967 14.3033C2.29018 12.8968 1.5 10.9891 1.5 9C1.5 7.01088 2.29018 5.10322 3.6967 3.6967C5.10322 2.29018 7.01088 1.5 9 1.5Z" fill="#57E057"/>
+            </svg>
+            Buy low
+          </div>
+          <div class="instruction-item">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6.75 5.25V6.75H9.75V8.25H8.25C7.85217 8.25 7.47064 8.40803 7.18934 8.68934C6.90804 8.97064 6.75 9.35217 6.75 9.75V12.75H11.25V11.25H8.25V9.75H9.75C10.1478 9.75 10.5294 9.59196 10.8107 9.31066C11.092 9.02935 11.25 8.64782 11.25 8.25V6.75C11.25 6.35217 11.092 5.97064 10.8107 5.68934C10.5294 5.40803 10.1478 5.25 9.75 5.25H6.75ZM9 1.5C9.98491 1.5 10.9602 1.69399 11.8701 2.0709C12.7801 2.44781 13.6069 3.00026 14.3033 3.6967C14.9997 4.39314 15.5522 5.21993 15.9291 6.12987C16.306 7.03982 16.5 8.01509 16.5 9C16.5 10.9891 15.7098 12.8968 14.3033 14.3033C12.8968 15.7098 10.9891 16.5 9 16.5C8.01509 16.5 7.03982 16.306 6.12987 15.9291C5.21993 15.5522 4.39314 14.9997 3.6967 14.3033C2.29018 12.8968 1.5 10.9891 1.5 9C1.5 7.01088 2.29018 5.10322 3.6967 3.6967C5.10322 2.29018 7.01088 1.5 9 1.5Z" fill="#57E057"/>
+            </svg>
+            Sell high
+          </div>
+          <div class="instruction-item">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M11.25 11.25V10.125C11.25 9.82663 11.1315 9.54048 10.9205 9.3295C10.7095 9.11853 10.4234 9 10.125 9C10.4234 9 10.7095 8.88147 10.9205 8.67049C11.1315 8.45952 11.25 8.17337 11.25 7.875V6.75C11.25 6.35217 11.092 5.97064 10.8107 5.68934C10.5294 5.40803 10.1478 5.25 9.75 5.25H6.75V6.75H9.75V8.25H8.25V9.75H9.75V11.25H6.75V12.75H9.75C10.1478 12.75 10.5294 12.592 10.8107 12.3107C11.092 12.0294 11.25 11.6478 11.25 11.25ZM9 1.5C9.98491 1.5 10.9602 1.69399 11.8701 2.0709C12.7801 2.44781 13.6069 3.00026 14.3033 3.6967C14.9997 4.39314 15.5522 5.21993 15.9291 6.12987C16.306 7.03982 16.5 8.01509 16.5 9C16.5 10.9891 15.7098 12.8968 14.3033 14.3033C12.8968 15.7098 10.9891 16.5 9 16.5C8.01509 16.5 7.03982 16.306 6.12987 15.9291C5.21993 15.5522 4.39314 14.9997 3.6967 14.3033C2.29018 12.8968 1.5 10.9891 1.5 9C1.5 7.01088 2.29018 5.10322 3.6967 3.6967C5.10322 2.29018 7.01088 1.5 9 1.5Z" fill="#57E057"/>
+            </svg>
+            Don't get rugged
+          </div>
+        </div>
+      </div>
+      <button id="startButton">Start</button>
+      <img src="https://lqy3lriiybxcejon.public.blob.vercel-storage.com/QgW0om7L6HrO/Candles%20Bottom-u1K1HId1ga5DyHesE6dOHn6FNSQIsM.png?aez5" alt="Bottom Candles" id="bottomCandles">
+    </div>
+
+    <!-- Portfolio Display Container -->
+    <div id="portfolioWrapper">
+      <div id="chains">
+        <div id="left-chain"></div>
+        <div id="right-chain"></div>
+      </div>
+    <div id="portfolioContainer">
+        <div id="portfolioValue">$100</div>
+        <div id="marketCapText">Market Cap: $100,000</div>
+    </div>
+    </div>
+    <div id="ruggedMessage">
+      <svg width="413" height="89" viewBox="0 0 413 89" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <g clip-path="url(#clip0_10_485)">
+        <path d="M36.224 -0.600006C44.3307 -0.600006 50.56 1.064 54.912 4.392C59.264 7.63466 61.44 12.2427 61.44 18.216C61.44 19.496 61.3547 20.7333 61.184 21.928C61.184 21.928 61.1413 22.312 61.056 23.08C60.9707 23.848 60.8427 24.7867 60.672 25.896C60.5013 26.92 60.3307 27.9867 60.16 29.096C59.9893 30.12 59.8613 31.016 59.776 31.784C59.6907 32.552 59.648 32.936 59.648 32.936C58.5387 40.616 55.168 46.4613 49.536 50.472C49.536 50.472 49.664 51.7947 49.92 54.44C50.2613 57 50.6453 60.2 51.072 64.04C51.584 67.7947 52.0533 71.592 52.48 75.432C52.992 79.272 53.376 82.5147 53.632 85.16C53.9733 87.72 54.144 89 54.144 89C54.144 89 53.4187 89 51.968 89C50.6027 89 48.8533 89 46.72 89C44.672 89 42.5813 89 40.448 89C38.4 89 36.6507 89 35.2 89C33.8347 89 33.1093 89 33.024 89C33.024 89 32.896 88.232 32.64 86.696C32.4693 85.0747 32.2133 83.0267 31.872 80.552C31.616 78.0773 31.3173 75.4747 30.976 72.744C30.72 69.928 30.4213 67.2827 30.08 64.808C29.824 62.3333 29.568 60.328 29.312 58.792C29.1413 57.1707 29.056 56.36 29.056 56.36C28.8 56.36 28.5013 56.36 28.16 56.36C28.16 56.36 28.0747 56.36 27.904 56.36C27.7333 56.36 27.52 56.36 27.264 56.36C27.008 56.36 26.7093 56.36 26.368 56.36C26.112 56.36 25.8987 56.36 25.728 56.36C25.5573 56.36 25.472 56.36 25.472 56.36C25.472 56.36 25.344 57.1707 25.088 58.792C24.9173 60.328 24.6613 62.3333 24.32 64.808C23.9787 67.2827 23.5947 69.928 23.168 72.744C22.7413 75.4747 22.3573 78.0773 22.016 80.552C21.6747 83.0267 21.376 85.0747 21.12 86.696C20.9493 88.232 20.864 89 20.864 89C20.864 89 20.1387 89 18.688 89C17.3227 89 15.616 89 13.568 89C11.52 89 9.472 89 7.424 89C5.376 89 3.62667 89 2.176 89C0.810667 89 0.0853333 89 0 89C0 89 0.64 84.4773 1.92 75.432C3.2 66.3013 4.65067 55.8907 6.272 44.2C7.89333 32.5093 9.344 22.1413 10.624 13.096C11.904 3.96533 12.544 -0.600006 12.544 -0.600006C12.544 -0.600006 13.312 -0.600006 14.848 -0.600006C16.4693 -0.600006 18.432 -0.600006 20.736 -0.600006C23.1253 -0.600006 25.472 -0.600006 27.776 -0.600006C30.1653 -0.600006 32.128 -0.600006 33.664 -0.600006C35.2853 -0.600006 36.1387 -0.600006 36.224 -0.600006ZM31.104 15.656C31.104 15.656 30.976 16.5093 30.72 18.216C30.464 19.9227 30.1653 22.0133 29.824 24.488C29.568 26.9627 29.2693 29.4373 28.928 31.912C28.5867 34.3867 28.288 36.4773 28.032 38.184C27.776 39.8907 27.648 40.744 27.648 40.744C27.648 40.744 27.6907 40.744 27.776 40.744C27.8613 40.744 27.9467 40.744 28.032 40.744C28.1173 40.744 28.2027 40.744 28.288 40.744C28.4587 40.744 28.5867 40.744 28.672 40.744C28.7573 40.744 28.8 40.744 28.8 40.744C33.92 40.744 36.9493 38.3547 37.888 33.576C37.888 33.576 37.9307 33.192 38.016 32.424C38.1013 31.656 38.2293 30.76 38.4 29.736C38.5707 28.6267 38.7413 27.56 38.912 26.536C39.0827 25.4267 39.2107 24.488 39.296 23.72C39.3813 22.952 39.424 22.568 39.424 22.568C39.5093 22.1413 39.552 21.7573 39.552 21.416C39.552 17.832 37.1627 15.912 32.384 15.656C32.384 15.656 32.3413 15.656 32.256 15.656C32.1707 15.656 32.0427 15.656 31.872 15.656C31.7867 15.656 31.6587 15.656 31.488 15.656C31.4027 15.656 31.3173 15.656 31.232 15.656C31.1467 15.656 31.104 15.656 31.104 15.656ZM102.353 -0.600006C102.353 -0.600006 103.036 -0.600006 104.401 -0.600006C105.852 -0.600006 107.601 -0.600006 109.649 -0.600006C111.697 -0.600006 113.745 -0.600006 115.793 -0.600006C117.841 -0.600006 119.548 -0.600006 120.913 -0.600006C122.364 -0.600006 123.132 -0.600006 123.217 -0.600006C123.217 -0.600006 122.876 1.70399 122.193 6.312C121.596 10.8347 120.828 16.424 119.889 23.08C119.036 29.6507 118.14 36.264 117.201 42.92C116.262 49.4907 115.452 55.08 114.769 59.688C114.172 64.2107 113.873 66.472 113.873 66.472C112.764 73.8107 109.606 79.6133 104.401 83.88C99.1957 88.1467 92.4117 90.28 84.049 90.28C76.5397 90.28 70.737 88.5307 66.641 85.032C62.6303 81.448 60.625 76.6267 60.625 70.568C60.625 69.288 60.753 67.9227 61.009 66.472C61.009 66.472 61.3077 64.2107 61.905 59.688C62.5877 55.08 63.3983 49.4907 64.337 42.92C65.2757 36.264 66.1717 29.6507 67.025 23.08C67.9637 16.424 68.7317 10.8347 69.329 6.312C70.0117 1.70399 70.353 -0.600006 70.353 -0.600006C70.353 -0.600006 71.0357 -0.600006 72.401 -0.600006C73.8517 -0.600006 75.601 -0.600006 77.649 -0.600006C79.697 -0.600006 81.745 -0.600006 83.793 -0.600006C85.9263 -0.600006 87.6757 -0.600006 89.041 -0.600006C90.4917 -0.600006 91.2597 -0.600006 91.345 -0.600006C91.345 -0.600006 90.833 2.856 89.809 9.768C88.8703 16.5947 87.761 24.4453 86.481 33.32C85.2863 42.1093 84.177 49.96 83.153 56.872C82.2143 63.6987 81.745 67.112 81.745 67.112C81.745 67.4533 81.745 67.88 81.745 68.392C81.745 71.2933 83.3663 72.8293 86.609 73C90.1077 73 92.1983 71.0373 92.881 67.112C92.881 67.112 93.0943 65.4907 93.521 62.248C94.033 58.92 94.6303 54.696 95.313 49.576C96.081 44.456 96.849 39.0373 97.617 33.32C98.385 27.5173 99.1103 22.056 99.793 16.936C100.561 11.816 101.158 7.63466 101.585 4.392C102.097 1.064 102.353 -0.600006 102.353 -0.600006ZM160.403 -1.88C167.4 -1.88 172.99 -0.0880051 177.171 3.49599C181.352 6.99466 183.443 11.8587 183.443 18.088C183.443 19.1973 183.4 20.3067 183.315 21.416C183.315 21.416 183.272 21.7573 183.187 22.44C183.102 23.1227 182.974 23.9333 182.803 24.872C182.718 25.8107 182.59 26.7493 182.419 27.688C182.248 28.6267 182.12 29.4373 182.035 30.12C181.95 30.8027 181.907 31.144 181.907 31.144C181.907 31.144 181.267 31.144 179.987 31.144C178.707 31.144 177.128 31.144 175.251 31.144C173.459 31.144 171.624 31.144 169.747 31.144C167.87 31.144 166.291 31.144 165.011 31.144C163.731 31.144 163.048 31.144 162.963 31.144C162.963 31.144 163.006 30.6747 163.091 29.736C163.262 28.7973 163.432 27.7307 163.603 26.536C163.774 25.256 163.902 24.1467 163.987 23.208C164.158 22.2693 164.243 21.8 164.243 21.8C164.243 21.6293 164.243 21.4587 164.243 21.288C164.243 21.1173 164.243 20.9467 164.243 20.776C164.243 17.0213 162.28 15.1013 158.355 15.016C153.491 15.016 150.419 18.6853 149.139 26.024C149.139 26.024 148.968 27.2613 148.627 29.736C148.286 32.2107 147.859 35.24 147.347 38.824C146.92 42.3227 146.451 45.864 145.939 49.448C145.427 52.9467 145 55.9333 144.659 58.408C144.318 60.8827 144.147 62.12 144.147 62.12C143.976 63.3147 143.891 64.424 143.891 65.448C143.891 70.568 146.11 73.2133 150.547 73.384C155.155 73.384 157.843 70.5253 158.611 64.808C158.611 64.808 158.696 64.1253 158.867 62.76C159.123 61.3093 159.336 59.7307 159.507 58.024C159.763 56.232 159.976 54.6533 160.147 53.288C160.403 51.8373 160.531 51.112 160.531 51.112C160.531 51.112 160.275 51.112 159.763 51.112C159.251 51.112 158.568 51.112 157.715 51.112C156.947 51.112 156.179 51.112 155.411 51.112C154.643 51.112 153.96 51.112 153.363 51.112C152.851 51.112 152.595 51.112 152.595 51.112C152.595 51.112 152.68 50.4293 152.851 49.064C153.107 47.6133 153.32 45.992 153.491 44.2C153.747 42.408 153.96 40.8293 154.131 39.464C154.387 38.0133 154.515 37.288 154.515 37.288C154.515 37.288 155.411 37.288 157.203 37.288C158.995 37.288 161.171 37.288 163.731 37.288C166.376 37.288 169.022 37.288 171.667 37.288C174.312 37.288 176.488 37.288 178.195 37.288C179.987 37.288 180.968 37.288 181.139 37.288C181.139 37.288 180.755 39.9333 179.987 45.224C179.304 50.4293 178.451 56.4027 177.427 63.144C176.488 69.8853 175.635 75.9013 174.867 81.192C174.184 86.3973 173.843 89 173.843 89C173.843 89 173.331 89 172.307 89C171.368 89 170.174 89 168.723 89C167.272 89 165.822 89 164.371 89C162.92 89 161.683 89 160.659 89C159.72 89 159.208 89 159.123 89C159.123 89 159.166 88.7867 159.251 88.36C159.336 87.848 159.422 87.2507 159.507 86.568C159.592 85.8 159.678 85.0747 159.763 84.392C159.848 83.7093 159.934 83.1547 160.019 82.728C160.104 82.216 160.147 81.96 160.147 81.96C158.44 84.264 156.136 86.2267 153.235 87.848C150.334 89.4693 146.622 90.28 142.099 90.28C135.614 90.28 130.622 88.4453 127.123 84.776C123.624 81.0213 121.875 75.688 121.875 68.776C121.875 66.984 122.046 64.9787 122.387 62.76C122.387 62.6747 122.387 62.5467 122.387 62.376C122.387 62.376 122.643 60.5413 123.155 56.872C123.667 53.1173 124.264 48.8933 124.947 44.2C125.63 39.4213 126.227 35.1973 126.739 31.528C127.251 27.7733 127.507 25.896 127.507 25.896C128.872 17.0213 132.499 10.1947 138.387 5.41599C144.275 0.551994 151.614 -1.88 160.403 -1.88ZM223.278 -1.88C230.275 -1.88 235.865 -0.0880051 240.046 3.49599C244.227 6.99466 246.318 11.8587 246.318 18.088C246.318 19.1973 246.275 20.3067 246.19 21.416C246.19 21.416 246.147 21.7573 246.062 22.44C245.977 23.1227 245.849 23.9333 245.678 24.872C245.593 25.8107 245.465 26.7493 245.294 27.688C245.123 28.6267 244.995 29.4373 244.91 30.12C244.825 30.8027 244.782 31.144 244.782 31.144C244.782 31.144 244.142 31.144 242.862 31.144C241.582 31.144 240.003 31.144 238.126 31.144C236.334 31.144 234.499 31.144 232.622 31.144C230.745 31.144 229.166 31.144 227.886 31.144C226.606 31.144 225.923 31.144 225.838 31.144C225.838 31.144 225.881 30.6747 225.966 29.736C226.137 28.7973 226.307 27.7307 226.478 26.536C226.649 25.256 226.777 24.1467 226.862 23.208C227.033 22.2693 227.118 21.8 227.118 21.8C227.118 21.6293 227.118 21.4587 227.118 21.288C227.118 21.1173 227.118 20.9467 227.118 20.776C227.118 17.0213 225.155 15.1013 221.23 15.016C216.366 15.016 213.294 18.6853 212.014 26.024C212.014 26.024 211.843 27.2613 211.502 29.736C211.161 32.2107 210.734 35.24 210.222 38.824C209.795 42.3227 209.326 45.864 208.814 49.448C208.302 52.9467 207.875 55.9333 207.534 58.408C207.193 60.8827 207.022 62.12 207.022 62.12C206.851 63.3147 206.766 64.424 206.766 65.448C206.766 70.568 208.985 73.2133 213.422 73.384C218.03 73.384 220.718 70.5253 221.486 64.808C221.486 64.808 221.571 64.1253 221.742 62.76C221.998 61.3093 222.211 59.7307 222.382 58.024C222.638 56.232 222.851 54.6533 223.022 53.288C223.278 51.8373 223.406 51.112 223.406 51.112C223.406 51.112 223.15 51.112 222.638 51.112C222.126 51.112 221.443 51.112 220.59 51.112C219.822 51.112 219.054 51.112 218.286 51.112C217.518 51.112 216.835 51.112 216.238 51.112C215.726 51.112 215.47 51.112 215.47 51.112C215.47 51.112 215.555 50.4293 215.726 49.064C215.982 47.6133 216.195 45.992 216.366 44.2C216.622 42.408 216.835 40.8293 217.006 39.464C217.262 38.0133 217.39 37.288 217.39 37.288C217.39 37.288 218.286 37.288 220.078 37.288C221.87 37.288 224.046 37.288 226.606 37.288C229.251 37.288 231.897 37.288 234.542 37.288C237.187 37.288 239.363 37.288 241.07 37.288C242.862 37.288 243.843 37.288 244.014 37.288C244.014 37.288 243.63 39.9333 242.862 45.224C242.179 50.4293 241.326 56.4027 240.302 63.144C239.363 69.8853 238.51 75.9013 237.742 81.192C237.059 86.3973 236.718 89 236.718 89C236.718 89 236.206 89 235.182 89C234.243 89 233.049 89 231.598 89C230.147 89 228.697 89 227.246 89C225.795 89 224.558 89 223.534 89C222.595 89 222.083 89 221.998 89C221.998 89 222.041 88.7867 222.126 88.36C222.211 87.848 222.297 87.2507 222.382 86.568C222.467 85.8 222.553 85.0747 222.638 84.392C222.723 83.7093 222.809 83.1547 222.894 82.728C222.979 82.216 223.022 81.96 223.022 81.96C221.315 84.264 219.011 86.2267 216.11 87.848C213.209 89.4693 209.497 90.28 204.974 90.28C198.489 90.28 193.497 88.4453 189.998 84.776C186.499 81.0213 184.75 75.688 184.75 68.776C184.75 66.984 184.921 64.9787 185.262 62.76C185.262 62.6747 185.262 62.5467 185.262 62.376C185.262 62.376 185.518 60.5413 186.03 56.872C186.542 53.1173 187.139 48.8933 187.822 44.2C188.505 39.4213 189.102 35.1973 189.614 31.528C190.126 27.7733 190.382 25.896 190.382 25.896C191.747 17.0213 195.374 10.1947 201.262 5.41599C207.15 0.551994 214.489 -1.88 223.278 -1.88ZM302.665 15.912C302.665 15.912 301.854 15.912 300.233 15.912C298.697 15.912 296.734 15.912 294.345 15.912C291.956 15.912 289.566 15.912 287.177 15.912C284.873 15.912 282.91 15.912 281.289 15.912C279.668 15.912 278.814 15.912 278.729 15.912C278.729 15.912 278.601 16.8507 278.345 18.728C278.089 20.6053 277.79 22.7387 277.449 25.128C277.108 27.432 276.809 29.5227 276.553 31.4C276.297 33.2773 276.169 34.216 276.169 34.216C276.169 34.216 276.852 34.216 278.217 34.216C279.582 34.216 281.246 34.216 283.209 34.216C285.257 34.216 287.305 34.216 289.353 34.216C291.401 34.216 293.108 34.216 294.473 34.216C295.838 34.216 296.564 34.216 296.649 34.216C296.649 34.216 296.564 34.7707 296.393 35.88C296.222 36.9893 296.009 38.3547 295.753 39.976C295.582 41.512 295.369 43.0907 295.113 44.712C294.942 46.248 294.772 47.5707 294.601 48.68C294.43 49.7893 294.345 50.344 294.345 50.344C294.345 50.344 293.662 50.344 292.297 50.344C290.932 50.344 289.225 50.344 287.177 50.344C285.214 50.344 283.209 50.344 281.161 50.344C279.113 50.344 277.406 50.344 276.041 50.344C274.676 50.344 273.95 50.344 273.865 50.344C273.865 50.344 273.694 51.496 273.353 53.8C273.097 56.0187 272.756 58.5787 272.329 61.48C271.902 64.296 271.518 66.856 271.177 69.16C270.921 71.3787 270.793 72.488 270.793 72.488C270.793 72.488 271.561 72.488 273.097 72.488C274.718 72.488 276.681 72.488 278.985 72.488C281.374 72.488 283.721 72.488 286.025 72.488C288.414 72.488 290.377 72.488 291.913 72.488C293.534 72.488 294.388 72.488 294.473 72.488C294.473 72.488 294.345 73.3413 294.089 75.048C293.918 76.6693 293.662 78.5893 293.321 80.808C292.98 82.9413 292.681 84.8613 292.425 86.568C292.254 88.1893 292.169 89 292.169 89C292.169 89 290.676 89 287.689 89C284.702 89 280.99 89 276.553 89C272.201 89 267.806 89 263.369 89C259.017 89 255.348 89 252.361 89C249.46 89 247.881 89 247.625 89C247.625 89 248.265 84.4773 249.545 75.432C250.825 66.3013 252.276 55.8907 253.897 44.2C255.518 32.5093 256.969 22.1413 258.249 13.096C259.529 3.96533 260.169 -0.600006 260.169 -0.600006C260.169 -0.600006 261.662 -0.600006 264.649 -0.600006C267.636 -0.600006 271.348 -0.600006 275.785 -0.600006C280.222 -0.600006 284.617 -0.600006 288.969 -0.600006C293.406 -0.600006 297.118 -0.600006 300.105 -0.600006C303.092 -0.600006 304.713 -0.600006 304.969 -0.600006C304.969 -0.600006 304.841 0.253329 304.585 1.96C304.414 3.58133 304.158 5.50133 303.817 7.71999C303.476 9.85333 303.177 11.7733 302.921 13.48C302.75 15.1013 302.665 15.912 302.665 15.912ZM334.554 -0.600006C343.941 -0.600006 351.109 1.36266 356.058 5.28799C361.007 9.21333 363.482 14.9733 363.482 22.568C363.482 24.1893 363.354 25.9813 363.098 27.944C363.098 27.944 362.97 28.712 362.714 30.248C362.543 31.784 362.287 33.7893 361.946 36.264C361.605 38.6533 361.221 41.2133 360.794 43.944C360.453 46.6747 360.111 49.2773 359.77 51.752C359.429 54.1413 359.13 56.104 358.874 57.64C358.703 59.176 358.618 59.944 358.618 59.944C357.253 69.416 353.413 76.6267 347.098 81.576C340.783 86.5253 332.421 89 322.01 89C322.01 89 321.285 89 319.834 89C318.383 89 316.591 89 314.458 89C312.325 89 310.149 89 307.93 89C305.797 89 304.005 89 302.554 89C301.103 89 300.335 89 300.25 89C300.25 89 300.89 84.4773 302.17 75.432C303.45 66.3013 304.901 55.8907 306.522 44.2C308.143 32.5093 309.594 22.1413 310.874 13.096C312.154 3.96533 312.794 -0.600006 312.794 -0.600006C312.794 -0.600006 313.519 -0.600006 314.97 -0.600006C316.421 -0.600006 318.213 -0.600006 320.346 -0.600006C322.479 -0.600006 324.613 -0.600006 326.746 -0.600006C328.965 -0.600006 330.799 -0.600006 332.25 -0.600006C333.701 -0.600006 334.469 -0.600006 334.554 -0.600006ZM341.466 27.944C341.637 26.8347 341.722 25.8533 341.722 25C341.722 18.9413 338.565 16.04 332.25 16.296C332.25 16.296 332.207 16.296 332.122 16.296C332.122 16.296 332.079 16.296 331.994 16.296C331.909 16.296 331.781 16.296 331.61 16.296C331.525 16.296 331.439 16.296 331.354 16.296C331.354 16.296 330.927 19.1547 330.074 24.872C329.306 30.504 328.41 36.9467 327.386 44.2C326.362 51.4533 325.423 57.9387 324.57 63.656C323.802 69.288 323.418 72.104 323.418 72.104C323.503 72.104 323.589 72.104 323.674 72.104C323.759 72.104 323.845 72.104 323.93 72.104C324.101 72.104 324.186 72.104 324.186 72.104C324.271 72.104 324.314 72.104 324.314 72.104C331.653 72.104 335.877 68.0507 336.986 59.944C336.986 59.944 337.114 58.8773 337.37 56.744C337.711 54.5253 338.095 51.8373 338.522 48.68C339.034 45.5227 339.503 42.3653 339.93 39.208C340.357 36.0507 340.698 33.4053 340.954 31.272C341.295 29.0533 341.466 27.944 341.466 27.944Z" fill="#FF5237"/>
+        <path d="M373.192 0H383.577L380.115 26.1765H400.885L394.769 72.4216L407.808 63.6961L413 70.6765L387.038 89L368.132 67.2444L375.111 61.3111L384.442 72.4216L389.635 35.7745H368L373.192 0Z" fill="#FF5237"/>
+        </g>
+        <defs>
+        <clipPath id="clip0_10_485">
+        <rect width="413" height="89" fill="white"/>
+        </clipPath>
+        </defs>
+        </svg>
+        <p id="ruggedInfo" style="display: none;">You Lost $100</p>
+  </div>
+
+    <!-- Chart Container -->
+    <div id="chartContainer">
+      <canvas id="chartCanvas"></canvas>
+      <div id="chartGradient"></div>
+    </div>
+
+    <!-- Controls -->
+    <div id="controls">
+      <!-- New trading controls with slider -->
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px">
+        <!-- Bottom section with price impact and action button -->
+        <div style="display: flex; flex-direction: column; gap: 20px">
+          <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 8px">
+            <div style="display: flex; align-items: flex-end; gap: 8px">
+              <div id="priceImpactLabel" style="font-size: 12px; text-transform: uppercase">Price Impact:</div>
+              <div id="priceImpactValue" style="font-size: 12px">+0.15%</div>
+          </div>
+            <div style="position: relative; width: auto;">
+              <button id="cashOutButton">CASH OUT<svg width="20" height="15" viewBox="0 0 16 12" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M11.5 3.13188V3C11.5 2.08625 10.8231 1.27812 9.59313 0.725C8.55438 0.2575 7.1875 0 5.75 0C4.3125 0 2.94562 0.2575 1.90687 0.725C0.676875 1.27812 0 2.08625 0 3V5.5C0 6.41375 0.676875 7.22187 1.90687 7.775C2.5753 8.06423 3.27915 8.26347 4 8.3675V8.5C4 9.41375 4.67688 10.2219 5.90688 10.775C6.94563 11.2425 8.3125 11.5 9.75 11.5C11.1875 11.5 12.5544 11.2425 13.5931 10.775C14.8231 10.2219 15.5 9.41375 15.5 8.5V6C15.5 4.61625 13.9194 3.505 11.5 3.13188ZM14 6C14 6.48438 12.6394 7.405 10.1369 7.4925C11.0206 6.9625 11.5 6.26875 11.5 5.5V4.6525C13.1175 4.94688 14 5.5925 14 6ZM6.46063 6.97688C6.23375 6.99188 5.99688 7 5.75 7C5.4325 7 5.13187 6.98625 4.84812 6.96187C4.82449 6.95877 4.80071 6.95689 4.77688 6.95625C4.6825 6.9475 4.58937 6.9375 4.5 6.92625V5.93312C4.91517 5.97773 5.33244 6.00005 5.75 6C6.16756 6.00005 6.58483 5.97773 7 5.93312V6.92625C6.84437 6.945 6.68313 6.96125 6.51562 6.97313C6.5 6.97375 6.47875 6.975 6.46063 6.97688ZM10 5.07125V5.5C10 5.79875 9.4825 6.26312 8.5 6.59625V5.65875C8.87409 5.56066 9.23965 5.43253 9.59313 5.27563C9.73646 5.21104 9.87208 5.14292 10 5.07125ZM5.75 1.5C8.5 1.5 10 2.49063 10 3C10 3.50937 8.5 4.5 5.75 4.5C3 4.5 1.5 3.50937 1.5 3C1.5 2.49063 3 1.5 5.75 1.5ZM1.5 5.5V5.07125C1.62833 5.1425 1.76396 5.21042 1.90687 5.275C2.26035 5.43191 2.62591 5.56003 3 5.65812V6.59562C2.0175 6.26312 1.5 5.79875 1.5 5.5ZM5.5 8.5H5.75C5.97667 8.5 6.20104 8.49333 6.42312 8.48C6.60854 8.54542 6.80083 8.605 7 8.65875V9.59625C6.0175 9.26312 5.5 8.79875 5.5 8.5ZM8.5 9.92625V8.93375C8.91518 8.97815 9.33245 9.00026 9.75 9C10.1676 9.00005 10.5848 8.97773 11 8.93312V9.92625C10.1696 10.0246 9.33043 10.0246 8.5 9.92625ZM12.5 9.59625V8.65875C12.8741 8.56066 13.2397 8.43253 13.5931 8.27563C13.7365 8.21146 13.8721 8.14354 14 8.07187V8.5C14 8.79875 13.4825 9.26312 12.5 9.59625Z"/></svg></button>
+        </div>
+          </div>
+          <div class="button-group">
+            <button id="halfButton">1/2</button>
+            <button id="actionButton">BUY - $100</button>
+            <button id="doubleButton">2x</button>
+          </div>
+          <div class="button-group" id="sellButtonGroup" style="display: none;">
+            <button id="sellButton">SELL - $0</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Global game state variables
+      let cash = 100; // available cash
+      let currentMarketCap = 100000; // starting market cap: 100k
+      let candles = []; // history of completed candles
+      // currentCandle holds {open, high, low, close, orders}
+      let currentCandle = { open: null, high: null, low: null, close: null, orders: [] };
+      let crashOccurred = false;
+      // Position holds { buyPrice, amount } when a trade is open.
+      let position = null;
+      let hasMadeTrade = false; // Track if player has made at least one trade
+      let gameUpdateTimeout;
+      let orderUpdateTimeout;
+      let crashCheckTimeout;
+      let gameStarted = false; // Track if game has started
+      let backgroundMusic = new Audio('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/QgW0om7L6HrO/background-UHW3MGRwqlQsayOQrD1JU2LsDIX6Zf.mp3?QUwg');
+      backgroundMusic.loop = true;
+      backgroundMusic.volume = 0.5;
+      backgroundMusic.play();
+      const popSound = new Audio('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/QgW0om7L6HrO/pop-QE7KPL2APIl952pNfDSRIGNVuIFUqP.mp3?Rt0u');
+      popSound.volume = 0.5;
+      const canvas = document.getElementById("chartCanvas");
+      const ctx = canvas.getContext("2d");
+      const startMenu = document.getElementById("startMenu");
+      const startButton = document.getElementById("startButton");
+      const crashSound = new Audio('https://lqy3lriiybxcejon.public.blob.vercel-storage.com/QgW0om7L6HrO/boom-VzSDmaLquwHrOEYObIA6exCw1Oeb9Y.mp3?OIZQ');
+      crashSound.volume = 0.5;
+
+      // Initialize UI elements with correct styling
+      function initializeUI() {
+        // Set initial price impact styling
+        const priceImpactLabel = document.getElementById("priceImpactLabel");
+        const priceImpactValue = document.getElementById("priceImpactValue");
+        priceImpactLabel.textContent = "Price Impact:";
+        priceImpactValue.textContent = "+0.15%";
+        priceImpactLabel.style.color = "#57E057";
+        priceImpactValue.style.color = "#57E057";
+        priceImpactValue.parentElement.style.color = "#57E057";
+
+        // Set initial market cap text
+        const marketCapText = document.getElementById("marketCapText");
+        marketCapText.innerText = `Market Cap: ${formatCurrency(currentMarketCap)}`;
+        marketCapText.style.color = "#2D732D";
+
+        // Set initial portfolio container styling
+        const portfolioContainer = document.getElementById("portfolioContainer");
+        portfolioContainer.style.backgroundColor = "#57E057";
+        portfolioContainer.style.borderBottomColor = "#46C446";
+
+        // Set initial chain colors
+        document.getElementById("left-chain").style.backgroundColor = "#57E057";
+        document.getElementById("right-chain").style.backgroundColor = "#57E057";
+
+        // Set initial portfolio value color
+        document.getElementById("portfolioValue").style.color = "#2D732D";
+      }
+
+      // Call initializeUI after DOM is loaded
+      document.addEventListener('DOMContentLoaded', initializeUI);
+
+      // Timing for candle length (1 second per candle)
+      let lastCandleTimestamp = Date.now();
+
+      // We'll use maxCandles as our threshold for "locking" the candle width.
+      const maxCandles = 30;
+      // Current scroll position (pixels), will animate smoothly
+      let currentScrollPosition = 0;
+      // Target scroll position (pixels), updated when new candles form
+      let targetScrollPosition = 0;
+      // Scroll animation speed factor (higher = faster catch-up)
+      const scrollSmoothingFactor = 0.2;
+      // Variables for locked (fixed) vertical viewport once we have 30 candles.
+      let lockedViewport = null; // { min, max } for the currently visible vertical range
+      let lockedScale = null; // scaleY (pixels per unit price) fixed once maxCandles is reached
+
+      // Get references to the UI elements
+      const actionButton = document.getElementById("actionButton");
+      const halfButton = document.getElementById("halfButton");
+      const doubleButton = document.getElementById("doubleButton");
+      const sellButton = document.getElementById("sellButton");
+      const sellButtonGroup = document.getElementById("sellButtonGroup");
+      const priceImpactValue = document.getElementById("priceImpactValue");
+      const cashOutButton = document.getElementById("cashOutButton");
+
+      // Add buy amount multiplier state
+      let buyMultiplier = 1;
+
+      // Add start button click handler
+      startButton.addEventListener("click", () => {
+        startMenu.style.display = "none";
+        gameStarted = true;
+
+        popSound.play();
+  
+        // Show elements with animations
+        document.getElementById("portfolioWrapper").classList.add("show");
+        document.getElementById("controls").classList.add("show");
+        
+        // Add 3 second delay before starting game loops
+        setTimeout(() => {
+          lastCandleTimestamp = Date.now(); // Reset timestamp here after the delay
+          scheduleUpdate();
+          scheduleOrderUpdate();
+          setTimeout(checkForCrash, 1000);
+          updateDisplays();
+        }, 1000);
+      });
+
+      // Add event listeners for multiplier buttons
+      halfButton.addEventListener("click", () => {
+        if (crashOccurred) return;
+        popSound.play();
+
+        // Only adjust buy amount, no sell functionality
+        const currentAmount = cash * buyMultiplier;
+        const newAmount = currentAmount / 2;
+        
+        if (newAmount >= 1) {
+          buyMultiplier = newAmount / cash;
+        } else {
+          buyMultiplier = 1 / cash; // Set to minimum $1
+        }
+        
+        updateDisplays();
+      });
+
+      doubleButton.addEventListener("click", () => {
+        if (crashOccurred) return;
+        popSound.play();
+
+        // Only adjust buy amount, no sell functionality
+        const currentAmount = cash * buyMultiplier;
+        const newAmount = currentAmount * 2;
+        
+        if (newAmount <= cash) {
+          buyMultiplier = newAmount / cash;
+        } else {
+          buyMultiplier = 1; // Set to maximum (all cash)
+        }
+        
+        updateDisplays();
+      });
+
+      // Add sell button click handler
+      sellButton.addEventListener("click", () => {
+        if (crashOccurred) return;
+        popSound.play();
+
+        // Add haptic feedback when placing an order
+        window.FarcadeSDK.singlePlayer.actions.hapticFeedback();
+
+        // Calculate sell amount (sell entire position)
+        const currentValue = position.amount * (currentMarketCap / position.buyPrice);
+
+        // Add player's sell order
+        currentCandle.orders.push({
+          type: "sell",
+          value: currentValue,
+          isPlayer: true,
+        });
+
+        // Calculate and apply market impact
+        const rawRatio = currentValue / currentMarketCap;
+        let impactRatio;
+        if (rawRatio <= 0.1) {
+          impactRatio = rawRatio * 2.0;
+        } else if (rawRatio <= 1.0) {
+          impactRatio = 0.2 + (rawRatio - 0.1) * 4.0;
+        } else {
+          impactRatio = 3.8 + (rawRatio - 1.0) * 7.0;
+        }
+
+        // Update price impact display
+        priceImpactValue.textContent = `-${(impactRatio * 100).toFixed(2)}%`;
+        priceImpactValue.style.color = "#FF5237";
+        priceImpactValue.parentElement.style.color = "#FF5237";
+
+        currentMarketCap *= 1 - impactRatio;
+        currentCandle.close = currentMarketCap;
+        currentCandle.low = Math.min(currentCandle.low, currentMarketCap);
+
+        // Add the value to cash and reduce position
+        cash += currentValue;
+        position.amount = 0;
+        position = null;
+
+        // Update displays and redraw chart
+        updateDisplays();
+        drawChart();
+      });
+
+      // Resize canvas to fill available space.
+      function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        // Height is computed based on CSS margins (top:50, bottom:100)
+        canvas.height = window.innerHeight - 150;
+      }
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
+
+      // Target market cap progression & crash probability functions.
+      function targetMarketCap(t) {
+        if (t < 20) {
+          // Doubled the time to reach 1M
+          // Reach 1M in 10 seconds - exponential growth
+          return 100000 * Math.exp(t * 0.12); // Reduced rate of exponential growth
+        } else {
+          // After 10 seconds, continue with aggressive growth
+          return 1000000 * Math.pow(10, (t - 20) / 25); // Slower growth after 1M
+        }
+      }
+      function crashProbability(mcap) {
+        // Fixed probabilities based on market cap ranges
+        if (mcap < 500000) { 
+          // 0 - 500k: 5% chance per update
+          return 0.05;
+        }
+        else if (mcap < 1000000) {
+            // 500k - 1M: 10% chance per update
+            return 0.10;
+        } else if (mcap < 10000000) {
+            // 1M - 10M: 7% chance per update
+            return 0.07;
+        } else if (mcap < 100000000) {
+            // 10M - 100M: 15% chance per update
+            return 0.15;
+        } else {
+            // 100M+: 20% chance per update
+            return 0.20;
+        }
+      }
+
+      // Format currency values.
+      function formatCurrency(num) {
+        if (num >= 1e12) {
+          return "$" + (num / 1e12).toFixed(1) + "t";
+        } else if (num >= 1e9) {
+          return "$" + (num / 1e9).toFixed(1) + "b";
+        } else if (num >= 1e6) {
+          return "$" + (num / 1e6).toFixed(1) + "m";
+        } else if (num >= 1e3) {
+          return "$" + (num / 1e3).toFixed(1) + "k";
+        } else {
+          return "$" + num.toFixed(0);
+        }
+      }
+
+      // Modify updateDisplays to handle the buy amount display
+      function updateDisplays() {
+        let totalPortfolio = cash;
+
+        // Update market cap text
+        document.getElementById("marketCapText").innerText = `Market Cap: ${formatCurrency(currentMarketCap)}`;
+
+        // Determine if buying or selling based on position
+        if (position) {
+          // We have a position, so we're in SELL mode
+          let currentValue = position.amount * (currentMarketCap / position.buyPrice);
+          totalPortfolio += currentValue;
+          const isProfit = currentValue >= position.amount;
+          const positionColor = isProfit ? "#57E057" : "#FF5237";
+          const positionBgColor = isProfit ? "#0B351E" : "#440E0D";
+          const buttonBgColor = isProfit ? "#57E057" : "#FF5237";
+          const buttonTextColor = isProfit ? "#2D732D" : "#AC1B05";
+          const buttonBorderColor = isProfit ? "#46C446" : "#E2371D";
+
+          document.getElementById("portfolioValue").style.color = buttonTextColor;
+          document.getElementById("marketCapText").style.color = buttonTextColor;
+          document.body.style.backgroundColor = positionBgColor;
+          document.getElementById("portfolioContainer").style.backgroundColor = buttonBgColor;
+          document.getElementById("portfolioContainer").style.borderBottomColor = buttonBorderColor;
+          document.getElementById("left-chain").style.backgroundColor = buttonBgColor;
+          document.getElementById("right-chain").style.backgroundColor = buttonBgColor;
+
+          // Update price impact colors
+          if (position) {
+            const currentValue = position.amount * (currentMarketCap / position.buyPrice);
+            const percentGain = Math.round(((currentValue - position.amount) / position.amount) * 100);
+            const sign = percentGain >= 0 ? "+" : "-";
+            document.getElementById("priceImpactLabel").textContent = "Your Position:";
+            
+            // Format percentage based on value
+            let formattedPercent;
+            if (Math.abs(percentGain) > 999999) {
+              formattedPercent = `${sign}${(Math.abs(percentGain) / 1000000).toFixed(1)}m%`;
+            } else if (Math.abs(percentGain) > 999) {
+              formattedPercent = `${sign}${(Math.abs(percentGain) / 1000).toFixed(1)}k%`;
+            } else {
+              formattedPercent = `${sign}${Math.abs(percentGain)}%`;
+            }
+            
+            priceImpactValue.textContent = formattedPercent;
+            priceImpactValue.style.color = positionColor;
+            priceImpactValue.parentElement.style.color = positionColor;
+            document.getElementById("priceImpactLabel").style.color = positionColor;
+          } else {
+            document.getElementById("priceImpactLabel").textContent = "Price Impact:";
+            priceImpactValue.textContent = "+0.00%";
+            priceImpactValue.style.color = "#57E057";
+            priceImpactValue.parentElement.style.color = "#57E057";
+            document.getElementById("priceImpactLabel").style.color = "#57E057";
+          }
+
+          // Hide cash out button
+          document.getElementById("cashOutButton").classList.remove("show");
+
+          // Update button colors
+          const buttons = [halfButton, actionButton, doubleButton, sellButton];
+          buttons.forEach(button => {
+            button.style.backgroundColor = buttonBgColor;
+            button.style.color = buttonTextColor;
+            button.style.borderBottomColor = buttonBorderColor;
+            button.style.borderLeftColor = buttonBorderColor;
+            button.style.borderRightColor = buttonBorderColor;
+          });
+
+          // Keep the color changes but remove disabling
+          halfButton.style.color = buttonBgColor;
+          doubleButton.style.color = buttonBgColor;
+
+          // Show sell button group and hide buy button group
+          document.querySelector('.button-group').style.display = 'none';
+          sellButtonGroup.style.display = 'flex';
+          sellButton.innerText = `SELL - ${formatCurrency(currentValue)}`;
+        } else {
+          // We don't have a position, so we're in BUY mode
+          document.getElementById("portfolioValue").style.color = "#2D732D";
+          document.getElementById("marketCapText").style.color = "#2D732D";
+          document.body.style.backgroundColor = "#0B351E";
+          document.getElementById("portfolioContainer").style.backgroundColor = "#57E057";
+          document.getElementById("portfolioContainer").style.borderBottomColor = "#46C446";
+          document.getElementById("left-chain").style.backgroundColor = "#57E057";
+          document.getElementById("right-chain").style.backgroundColor = "#57E057";
+
+          // Calculate price impact for potential buy order
+          const potentialBuyAmount = cash * buyMultiplier;
+          const rawRatio = potentialBuyAmount / currentMarketCap;
+          let impactRatio;
+          if (rawRatio <= 0.1) {
+            impactRatio = rawRatio * 1.5;
+          } else if (rawRatio <= 1.0) {
+            impactRatio = 0.15 + (rawRatio - 0.1) * 3.0;
+          } else {
+            impactRatio = 2.85 + (rawRatio - 1.0) * 5.0;
+          }
+
+          // Update price impact display
+          document.getElementById("priceImpactLabel").textContent = "Price Impact:";
+          priceImpactValue.textContent = `+${(impactRatio * 100).toFixed(2)}%`;
+          priceImpactValue.style.color = "#57E057";
+          priceImpactValue.parentElement.style.color = "#57E057";
+          document.getElementById("priceImpactLabel").style.color = "#57E057";
+
+          // Show cash out button only if user has made at least one trade
+          if (hasMadeTrade) {
+            document.getElementById("cashOutButton").classList.add("show");
+          } else {
+            document.getElementById("cashOutButton").classList.remove("show");
+          }
+
+          // Reset buttons to green colors
+          const buttons = [halfButton, actionButton, doubleButton, sellButton];
+          buttons.forEach(button => {
+            button.style.backgroundColor = "#57E057";
+            button.style.color = "#2D732D";
+            button.style.borderBottomColor = "#46C446";
+            button.style.borderLeftColor = "#46C446";
+            button.style.borderRightColor = "#46C446";
+          });
+
+          // Enable and reset multiplier buttons
+          halfButton.disabled = false;
+          doubleButton.disabled = false;
+          halfButton.style.color = "#2D732D";
+          doubleButton.style.color = "#2D732D";
+
+          // Show buy button group and hide sell button group
+          document.querySelector('.button-group').style.display = 'flex';
+          sellButtonGroup.style.display = 'none';
+
+          // Update action button with current buy amount
+          const buyAmount = cash * buyMultiplier;
+          actionButton.innerText = `BUY - ${formatCurrency(buyAmount)}`;
+        }
+
+        // Disable button during crashes
+        if (crashOccurred) {
+          actionButton.disabled = true;
+          sellButton.disabled = true;
+        }
+
+        document.getElementById("portfolioValue").innerText = formatCurrency(totalPortfolio);
+      }
+
+      // Modify the action button click handler to use the multiplier
+      actionButton.addEventListener("click", () => {
+        if (crashOccurred) return;
+        popSound.play();
+
+        // Add haptic feedback when placing an order
+        window.FarcadeSDK.singlePlayer.actions.hapticFeedback();
+
+        // Set flag indicating player has made a trade
+        hasMadeTrade = true;
+
+        // Check if we're buying or selling based on current position
+        if (!position) {
+          // BUY: We don't have a position, so we're buying
+          if (cash <= 0) return;
+
+          // Calculate buy amount based on multiplier
+          const buyAmount = cash * buyMultiplier;
+
+          // Calculate and apply market impact
+          const rawRatio = buyAmount / currentMarketCap;
+          let impactRatio;
+          if (rawRatio <= 0.1) {
+            impactRatio = rawRatio * 1.5;
+          } else if (rawRatio <= 1.0) {
+            impactRatio = 0.15 + (rawRatio - 0.1) * 3.0;
+          } else {
+            impactRatio = 2.85 + (rawRatio - 1.0) * 5.0;
+          }
+
+          // Update price impact display first
+          priceImpactValue.textContent = `+${(impactRatio * 100).toFixed(2)}%`;
+          priceImpactValue.style.color = "#57E057";
+          priceImpactValue.parentElement.style.color = "#57E057";
+
+          // Add player's buy order to current candle
+          currentCandle.orders.push({
+            type: "buy",
+            value: buyAmount,
+            isPlayer: true,
+          });
+
+          // Apply market impact after displaying it
+          currentMarketCap *= 1 + impactRatio;
+          currentCandle.close = currentMarketCap;
+          currentCandle.high = Math.max(currentCandle.high, currentMarketCap);
+
+          // Create position and subtract cash
+          position = position || { buyPrice: currentMarketCap, amount: 0 };
+          position.amount += buyAmount;
+          cash -= buyAmount;
+
+          // Switch button to sell if no cash left
+          if (cash <= 0) {
+            actionButton.innerText = "SELL";
+          }
+        } else {
+          // SELL: We have a position, so we're selling
+          if (!position || position.amount <= 0) return;
+
+          // Calculate sell amount (sell entire position)
+          const currentValue = position.amount * (currentMarketCap / position.buyPrice);
+
+          // Add player's sell order
+          currentCandle.orders.push({
+            type: "sell",
+            value: currentValue,
+            isPlayer: true,
+          });
+
+          // Calculate and apply market impact
+          const rawRatio = currentValue / currentMarketCap;
+          let impactRatio;
+          if (rawRatio <= 0.1) {
+            impactRatio = rawRatio * 2.0;
+          } else if (rawRatio <= 1.0) {
+            impactRatio = 0.2 + (rawRatio - 0.1) * 4.0;
+          } else {
+            impactRatio = 3.8 + (rawRatio - 1.0) * 7.0;
+          }
+
+          // Update price impact display
+          priceImpactValue.textContent = `-${(impactRatio * 100).toFixed(2)}%`;
+          priceImpactValue.style.color = "#FF5237";
+          priceImpactValue.parentElement.style.color = "#FF5237";
+
+          currentMarketCap *= 1 - impactRatio;
+          currentCandle.close = currentMarketCap;
+          currentCandle.low = Math.min(currentCandle.low, currentMarketCap);
+
+          // Add the value to cash and reduce position
+          cash += currentValue;
+          position.amount = 0;
+          position = null;
+
+          // Switch button to buy
+          actionButton.innerText = "BUY";
+        }
+
+        updateDisplays();
+        drawChart();
+      });
+
+      function drawChart() {
+  // 1) Resize the canvas to match its CSS display size (prevents any stretching)
+  const cssWidth = canvas.clientWidth;
+  const cssHeight = canvas.clientHeight;
+  if (canvas.width !== cssWidth || canvas.height !== cssHeight) {
+    canvas.width  = cssWidth;
+    canvas.height = cssHeight;
+  }
+
+  // 2) Clear the canvas
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const chartHeight = canvas.height;
+
+  // Fixed number of visible candles
+  const MAX_VISIBLE_CANDLES = 30;
+
+  // Gather all candles, including the in-progress one
+  const allCandles = [...candles];
+  if (currentCandle.open !== null) {
+    allCandles.push(currentCandle);
+  }
+  if (allCandles.length === 0) return;
+
+  // Compute widths
+  const candleWidth = Math.floor(canvas.width / (MAX_VISIBLE_CANDLES * 1.5));
+  const wickWidth   = Math.max(2, Math.floor(candleWidth * 0.15));
+  const gapSize     = 4;
+  const totalCandleSpace = candleWidth + gapSize;
+  const maxVisibleCandles = Math.floor(canvas.width / totalCandleSpace) - 3;
+
+  // Update scrolling
+  if (allCandles.length > maxVisibleCandles) {
+    targetScrollPosition = (allCandles.length - maxVisibleCandles) * totalCandleSpace;
+  } else {
+    targetScrollPosition = 0;
+  }
+  if (currentScrollPosition !== targetScrollPosition) {
+    currentScrollPosition += (targetScrollPosition - currentScrollPosition) * scrollSmoothingFactor;
+    if (Math.abs(targetScrollPosition - currentScrollPosition) < 0.5) {
+      currentScrollPosition = targetScrollPosition;
+    }
+  }
+
+  // Pick which candles to draw
+  let candlesToDraw;
+  if (allCandles.length <= maxVisibleCandles) {
+    candlesToDraw = allCandles;
+  } else {
+    const extraCandles = 2;
+    const startIdx = Math.max(0, allCandles.length - maxVisibleCandles - extraCandles);
+    candlesToDraw = allCandles.slice(startIdx);
+  }
+
+  // Find price range
+  let minPrice = Infinity, maxPrice = -Infinity;
+  candlesToDraw.forEach(c => {
+    minPrice = Math.min(minPrice, c.low);
+    maxPrice = Math.max(maxPrice, c.high);
+  });
+  const padding   = (maxPrice - minPrice) * 0.1;
+  minPrice -= padding;
+  maxPrice += padding;
+
+  // Scale factor
+  const priceRange  = maxPrice - minPrice;
+  const SCALE_FACTOR = chartHeight / priceRange;
+
+  // Remove old HTML indicators if any
+  document.querySelectorAll('.tradeIndicator').forEach(el => el.remove());
+
+  // Draw candles + indicators
+  candlesToDraw.forEach((candle, idx) => {
+    const historyIndex = allCandles.indexOf(candle);
+    const absoluteX = historyIndex * totalCandleSpace;
+    const x = absoluteX - currentScrollPosition;
+
+    // Skip off-screen
+    if (x < -candleWidth || x > canvas.width) return;
+
+    // Map prices to y's
+    const openY  = chartHeight - (candle.open  - minPrice) * SCALE_FACTOR;
+    const closeY = chartHeight - (candle.close - minPrice) * SCALE_FACTOR;
+    const highY  = chartHeight - (candle.high  - minPrice) * SCALE_FACTOR;
+    const lowY   = chartHeight - (candle.low   - minPrice) * SCALE_FACTOR;
+
+    // Candle color
+    const isBullish  = candle.close >= candle.open;
+    ctx.fillStyle    = isBullish ? '#57E057' : '#FF5237';
+
+    // Draw wick
+    const isCrashCandle = crashOccurred && candle.close === 0;
+    const wickX    = x + (candleWidth - wickWidth) / 2;
+    const wickH    = isCrashCandle ? chartHeight - highY : lowY - highY;
+    ctx.fillRect(wickX, highY, wickWidth, wickH);
+
+    // Draw body
+    const bodyTop    = Math.min(openY, closeY);
+    const bodyHeight = isCrashCandle ? chartHeight - bodyTop : Math.max(Math.max(openY, closeY) - bodyTop, 1);
+    ctx.fillRect(x, bodyTop, candleWidth, bodyHeight);
+
+    // Draw B/S indicators, but reset any transforms so the circles stay round
+    if (candle.orders && candle.orders.some(o => o.isPlayer)) {
+      const playerOrders = candle.orders.filter(o => o.isPlayer);
+      playerOrders.reverse().forEach((order, orderIdx) => {
+        const indicatorX = x + candleWidth / 2;
+        const indicatorY = Math.max(20, highY - 60 - orderIdx * 30);
+
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);  // identity matrix
+
+        // Circle
+        ctx.beginPath();
+        ctx.arc(indicatorX, indicatorY, 8, 0, Math.PI * 2);
+        ctx.fillStyle = order.type === 'buy' ? '#57E057' : '#FF5237';
+        ctx.fill();
+
+        // Text
+        ctx.fillStyle    = order.type === 'buy' ? '#2D732D' : '#AC1B05';
+        ctx.font         = '12px "Russo One"';
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(order.type === 'buy' ? 'B' : 'S', indicatorX, indicatorY + 1);
+
+        ctx.restore();
+      });
+    }
+  });
+}
+
+
+      // --------------------------
+      // Game Update Function
+      // --------------------------
+      let startTime = Date.now();
+
+      // Parameters for Geometric Brownian Motion
+      const gbmParams = {
+        mu: 0.7, // Base drift (annualized) - reduced for slower growth
+        sigma: 0.7, // Volatility (annualized) - slightly reduced volatility
+        targetWeight: 0.4, // How strongly to pull toward target - reduced for more gradual growth
+        positiveBias: 0.2, // Additional positive bias for upward movement - reduced
+        negativeBias: 0.4, // Additional negative bias for downward movements (stronger than positive for drama)
+      };
+
+      // Box-Muller transform to generate standard normal distribution
+      function generateNormalRandom() {
+        let u1 = Math.random();
+        let u2 = Math.random();
+
+        // Avoid u1 being too close to 0
+        if (u1 < 1e-8) u1 = 1e-8;
+
+        // Box-Muller transform
+        return Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+      }
+
+      // Biased normal random generator to favor positive movements
+      function generateBiasedNormalRandom() {
+        // Get a standard normal random number
+        let z = generateNormalRandom();
+
+        // Heavily biased distribution: 85% chance positive, 15% chance negative
+        if (Math.random() < 0.85) {
+          // When going up, apply an additional multiplier for larger moves
+          return (Math.abs(z) + gbmParams.positiveBias) * 1.2; // Reduced multiplier for more moderate upward moves
+        } else {
+          // When we go down, we go down hard (apply negative bias)
+          return -Math.abs(z) * (1 + gbmParams.negativeBias);
+        }
+      }
+
+      function gameUpdate() {
+        if (crashOccurred || !gameStarted) return;
+        const now = Date.now();
+        const elapsedSeconds = (now - startTime) / 1000;
+
+        // Calculate time step in years (assuming market runs 24/7)
+        const dt = 1 / (24 * 60 * 60 * 30); // fraction of a month for slower movement
+
+        // Get target market cap based on game progression
+        const targetMcap = targetMarketCap(elapsedSeconds);
+
+        // Calculate dynamic drift based on distance from target
+        const targetDrift = (Math.log(targetMcap) - Math.log(currentMarketCap)) * gbmParams.targetWeight;
+        // Add stronger positive bias when below target
+        const positiveBiasMultiplier = currentMarketCap < targetMcap ? 3.0 : 1.5; // Reduced multipliers for slower catchup
+        const effectiveDrift = gbmParams.mu * positiveBiasMultiplier + targetDrift;
+
+        // Calculate GBM parameters
+        const drift = (effectiveDrift - 0.5 * Math.pow(gbmParams.sigma, 2)) * dt;
+        const randomShock = gbmParams.sigma * Math.sqrt(dt) * generateBiasedNormalRandom();
+
+        // Calculate price movement using GBM
+        const movement = Math.exp(drift + randomShock);
+
+        // Add occasional jumps or crashes for excitement
+        // Far more likely to jump up (25% chance) than crash (8% chance)
+        const jumpRoll = Math.random();
+        if (jumpRoll < 0.15) {
+          // Reduced probability of jumps
+          // Larger jumps: +10% to +40%
+          const jumpSize = 1 + (Math.random() * 0.2 + 0.05); // Smaller jumps: +5% to +25%
+          currentMarketCap *= jumpSize;
+        } else if (jumpRoll < 0.2) {
+          // Regular negative jump: -5% to -15%
+          const jumpSize = 1 - (Math.random() * 0.1 + 0.05);
+          currentMarketCap *= jumpSize;
+        } else if (jumpRoll < 0.22) {
+          // Occasional mini-crash: -15% to -30% (but rare)
+          const jumpSize = 1 - (Math.random() * 0.15 + 0.15);
+          currentMarketCap *= jumpSize;
+        } else if (jumpRoll < 0.23) {
+          // Very rare severe drop: -30% to -50%
+          const jumpSize = 1 - (Math.random() * 0.2 + 0.3);
+          currentMarketCap *= jumpSize;
+        }
+
+        // Ensure market cap doesn't go below 1
+        if (currentMarketCap < 1) currentMarketCap = 1;
+
+        // Update the current candle.
+        if (currentCandle.open === null) {
+          currentCandle.open = currentMarketCap;
+          currentCandle.high = currentMarketCap;
+          currentCandle.low = currentMarketCap;
+          currentCandle.close = currentMarketCap;
+        } else {
+          currentCandle.close = currentMarketCap;
+          currentCandle.high = Math.max(currentCandle.high, currentMarketCap);
+          currentCandle.low = Math.min(currentCandle.low, currentMarketCap);
+        }
+
+        // Finalize the current candle every 1 second
+        if (now - lastCandleTimestamp >= 1000) {
+          candles.push({ ...currentCandle });
+          currentCandle = { open: null, high: null, low: null, close: null, orders: [] };
+          lastCandleTimestamp = now;
+        }
+
+        updateDisplays();
+        drawChart();
+        const nextInterval = Math.random() * 40 + 10; // Very frequent updates (10-50ms) for smoother animation
+        setTimeout(gameUpdate, nextInterval);
+      }
+
+      // Separate function to check for crashes once per second
+      function checkForCrash() {
+        if (crashOccurred || !gameStarted) return;
+
+        // Check current crash probability based on market cap
+        if (Math.random() < crashProbability(currentMarketCap)) {
+          executeCrash();
+          return;
+        }
+
+        // Schedule next crash check in 1 second
+        crashCheckTimeout = setTimeout(checkForCrash, 1000);
+      }
+
+      function scheduleUpdate() {
+        if (crashOccurred || !gameStarted) return;
+        const nextInterval = Math.random() * 450 + 50;
+        gameUpdateTimeout = setTimeout(gameUpdate, nextInterval);
+      }
+
+      // Add this function before 
+      function scheduleOrderUpdate() {
+        if (crashOccurred || !gameStarted) return;
+        simulateOrders();
+        const nextDelay = Math.random() * 450 + 50;
+        orderUpdateTimeout = setTimeout(scheduleOrderUpdate, nextDelay);
+      }
+
+      // Add this function for simulating orders
+      function simulateOrders() {
+        const orderType = Math.random() < 0.5 ? "sell" : "buy";
+        // Scale simulated orders to a percentage of market cap (0.01% to 1%)
+        const orderValuePct = Math.random() * 0.01 + 0.0001;
+        const orderValue = currentMarketCap * orderValuePct;
+        currentCandle.orders.push({ type: orderType, value: orderValue, isPlayer: false });
+
+        // Calculate price impact using direct ratio (keeping AI impacts smaller)
+        const rawRatio = orderValue / currentMarketCap;
+        // Simple linear scaling for AI orders to avoid wild movements
+        const impactRatio = rawRatio * 1.0;
+        // Sell impacts are 1.5x stronger
+        const impact = orderType === "buy" ? impactRatio : -impactRatio * 1.5;
+
+        // Apply impact as percentage change
+        currentMarketCap *= 1 + impact;
+        currentCandle.close = currentMarketCap;
+
+        // Update high/low if needed
+        if (impact > 0) {
+          currentCandle.high = Math.max(currentCandle.high, currentMarketCap);
+        } else {
+          currentCandle.low = Math.min(currentCandle.low, currentMarketCap);
+        }
+      }
+
+      // Modify the executeCrash function to instantly change all UI elements to red during a crash
+      function executeCrash() {
+        crashOccurred = true;
+        console.log("Rugged! Crash occurred.");
+
+        // Add haptic feedback when crash occurs
+        window.FarcadeSDK.singlePlayer.actions.hapticFeedback();
+
+        // Play crash sound effect
+        crashSound.play();
+
+        // Instantly set market cap to zero
+        currentMarketCap = 0;
+
+        // Update candle to reflect the crash
+        currentCandle.close = 0;
+        currentCandle.low = 0;
+
+        // Show gradient overlay
+        document.getElementById("chartGradient").classList.add("show");
+
+        // Instantly hide portfolio and controls without animation
+        document.getElementById("portfolioWrapper").classList.remove("show");
+        document.getElementById("portfolioWrapper").classList.add("crash");
+        document.getElementById("controls").classList.remove("show");
+        document.getElementById("controls").classList.add("crash");
+
+        // Set all UI elements to red variant instantly (no transition)
+        document.body.style.transition = "none";
+        document.getElementById("portfolioContainer").style.transition = "none";
+        document.getElementById("left-chain").style.transition = "none";
+        document.getElementById("right-chain").style.transition = "none";
+        document.getElementById("portfolioValue").style.transition = "none";
+        document.getElementById("marketCapText").style.transition = "none";
+        document.getElementById("priceImpactLabel").style.transition = "none";
+        document.getElementById("priceImpactValue").style.transition = "none";
+        document.getElementById("halfButton").style.transition = "none";
+        document.getElementById("actionButton").style.transition = "none";
+        document.getElementById("doubleButton").style.transition = "none";
+
+        // Set all colors to red
+        document.body.style.backgroundColor = "#440E0D";
+        document.getElementById("portfolioContainer").style.backgroundColor = "#FF5237";
+        document.getElementById("portfolioContainer").style.borderBottomColor = "#E2371D";
+        document.getElementById("left-chain").style.backgroundColor = "#FF5237";
+        document.getElementById("right-chain").style.backgroundColor = "#FF5237";
+        document.getElementById("portfolioValue").style.color = "#AC1B05";
+        document.getElementById("marketCapText").style.color = "#AC1B05";
+        document.getElementById("priceImpactLabel").style.color = "#FF5237";
+        document.getElementById("priceImpactValue").style.color = "#FF5237";
+        document.getElementById("priceImpactValue").parentElement.style.color = "#FF5237";
+
+        // Set all buttons to red
+        const buttons = [halfButton, actionButton, doubleButton, sellButton];
+        buttons.forEach(button => {
+          button.style.backgroundColor = "#FF5237";
+          button.style.color = "#AC1B05";
+          button.style.borderBottomColor = "#E2371D";
+          button.style.borderLeftColor = "#E2371D";
+          button.style.borderRightColor = "#E2371D";
+        });
+
+        // Restore transitions after a small delay
+        setTimeout(() => {
+          document.body.style.transition = "background-color 0.3s ease";
+          document.getElementById("portfolioContainer").style.transition = "all 0.3s ease";
+          document.getElementById("left-chain").style.transition = "background-color 0.3s ease";
+          document.getElementById("right-chain").style.transition = "background-color 0.3s ease";
+          document.getElementById("portfolioValue").style.transition = "color 0.3s ease";
+          document.getElementById("marketCapText").style.transition = "color 0.3s ease";
+          document.getElementById("priceImpactLabel").style.transition = "color 0.3s ease";
+          document.getElementById("priceImpactValue").style.transition = "color 0.3s ease";
+          document.getElementById("priceImpactValue").parentElement.style.transition = "color 0.3s ease";
+          buttons.forEach(button => {
+            button.style.transition = "all 0.3s ease";
+          });
+        }, 50);
+
+        // Override updateDisplays to maintain red theme
+        const originalUpdateDisplays = updateDisplays;
+        updateDisplays = function() {
+          // Only update the portfolio value and market cap text
+          let totalPortfolio = cash;
+          if (position) {
+            totalPortfolio += position.amount * (currentMarketCap / position.buyPrice);
+          }
+          document.getElementById("portfolioValue").innerText = formatCurrency(totalPortfolio);
+          document.getElementById("marketCapText").innerText = `Market Cap: ${formatCurrency(currentMarketCap)}`;
+          
+          // Set position percentage to -99% during crash
+          document.getElementById("priceImpactLabel").textContent = "Your Position:";
+          priceImpactValue.textContent = "-99%";
+          priceImpactValue.style.color = "#FF5237";
+          priceImpactValue.parentElement.style.color = "#FF5237";
+          document.getElementById("priceImpactLabel").style.color = "#FF5237";
+        };
+
+        // Calculate loss from any open position
+        if (position) {
+          // Update the loss info text and show it
+          document.getElementById("ruggedInfo").textContent = `You Lost ${formatCurrency(position.amount)}`;
+          document.getElementById("ruggedInfo").style.display = "block";
+          
+          // Position is worthless now, don't add anything to cash
+          position = null;
+        } else {
+          // Hide the loss info if no position
+          document.getElementById("ruggedInfo").textContent = `Market Cap ${formatCurrency(currentMarketCap)}`;
+          document.getElementById("ruggedInfo").style.display = "block";
+        }
+
+        // Show rugged message
+        document.getElementById("ruggedMessage").style.display = "block";
+
+        // Update display and chart
+        updateDisplays();
+        drawChart();
+
+       
+
+        // Only call gameOver if player has 0 cash
+        if (cash <= 0) {
+          backgroundMusic.pause();
+          setTimeout(() => {
+            window.FarcadeSDK.singlePlayer.actions.gameOver({ score: 0 });
+           
+          }, 1000);
+        } else {
+          // If player still has cash, continue the game after a delay
+          setTimeout(() => {
+            // Hide rugged message and gradient
+            document.getElementById("ruggedMessage").style.display = "none";
+            document.getElementById("chartGradient").classList.remove("show");
+
+            // Clear the chart immediately
+            candles = [];
+            currentCandle = { open: null, high: null, low: null, close: null, orders: [] };
+            drawChart(); // Redraw to show empty chart
+
+            backgroundMusic.play();
+
+            // Reset the market for a new round
+            currentMarketCap = 100000;
+            crashOccurred = false;
+
+            // Reset viewport and scrolling
+            lockedViewport = null;
+            lockedScale = null;
+            currentScrollPosition = 0;
+            targetScrollPosition = 0;
+
+            // Reset timestamps
+            startTime = Date.now();
+            lastCandleTimestamp = Date.now();
+
+            // Reset button state
+            actionButton.disabled = false;
+            buyMultiplier = 1; // Reset buy multiplier
+            position = null; // Ensure position is cleared
+
+            // Restore original updateDisplays function
+            updateDisplays = originalUpdateDisplays;
+
+            // Animate portfolio and controls back into view
+            document.getElementById("portfolioWrapper").classList.remove("crash");
+            document.getElementById("controls").classList.remove("crash");
+            document.getElementById("portfolioWrapper").classList.add("show");
+            document.getElementById("controls").classList.add("show");
+
+            // Update UI and restart game loops
+            updateDisplays();
+            scheduleUpdate();
+            scheduleOrderUpdate();
+            setTimeout(checkForCrash, 1000);
+          }, 3000);
+        }
+      }
+
+      // Add this after the updateDisplays(); line in the window.onload or at the bottom of the script
+      // This will let Farcade know the game is ready to play
+      window.FarcadeSDK.singlePlayer.actions.ready();
+
+      // Add these event listeners for play_again and toggle_mute right after the script starts
+      // Add this after the global game state variables
+      // Listen for "play again" requests from Farcade
+      window.FarcadeSDK.on("play_again", () => {
+        // Restore original updateDisplays function
+        updateDisplays = function() {
+          let totalPortfolio = cash;
+
+          // Update market cap text
+          document.getElementById("marketCapText").innerText = `Market Cap: ${formatCurrency(currentMarketCap)}`;
+
+          // Determine if buying or selling based on position
+          if (position) {
+            // We have a position, so we're in SELL mode
+            let currentValue = position.amount * (currentMarketCap / position.buyPrice);
+            totalPortfolio += currentValue;
+            const isProfit = currentValue >= position.amount;
+            const positionColor = isProfit ? "#57E057" : "#FF5237";
+            const positionBgColor = isProfit ? "#0B351E" : "#440E0D";
+            const buttonBgColor = isProfit ? "#57E057" : "#FF5237";
+            const buttonTextColor = isProfit ? "#2D732D" : "#AC1B05";
+            const buttonBorderColor = isProfit ? "#46C446" : "#E2371D";
+
+            document.getElementById("portfolioValue").style.color = buttonTextColor;
+            document.getElementById("marketCapText").style.color = buttonTextColor;
+            document.body.style.backgroundColor = positionBgColor;
+            document.getElementById("portfolioContainer").style.backgroundColor = buttonBgColor;
+            document.getElementById("portfolioContainer").style.borderBottomColor = buttonBorderColor;
+            document.getElementById("left-chain").style.backgroundColor = buttonBgColor;
+            document.getElementById("right-chain").style.backgroundColor = buttonBgColor;
+
+            // Update price impact colors
+            if (position) {
+              const currentValue = position.amount * (currentMarketCap / position.buyPrice);
+              const percentGain = Math.round(((currentValue - position.amount) / position.amount) * 100);
+              const sign = percentGain >= 0 ? "+" : "-";
+              document.getElementById("priceImpactLabel").textContent = "Your Position:";
+              
+              // Format percentage based on value
+              let formattedPercent;
+              if (Math.abs(percentGain) > 999999) {
+                formattedPercent = `${sign}${(Math.abs(percentGain) / 1000000).toFixed(1)}m%`;
+              } else if (Math.abs(percentGain) > 999) {
+                formattedPercent = `${sign}${(Math.abs(percentGain) / 1000).toFixed(1)}k%`;
+              } else {
+                formattedPercent = `${sign}${Math.abs(percentGain)}%`;
+              }
+              
+              priceImpactValue.textContent = formattedPercent;
+              priceImpactValue.style.color = positionColor;
+              priceImpactValue.parentElement.style.color = positionColor;
+              document.getElementById("priceImpactLabel").style.color = positionColor;
+            } else {
+              document.getElementById("priceImpactLabel").textContent = "Price Impact:";
+              priceImpactValue.textContent = "+0.00%";
+              priceImpactValue.style.color = "#57E057";
+              priceImpactValue.parentElement.style.color = "#57E057";
+              document.getElementById("priceImpactLabel").style.color = "#57E057";
+            }
+
+            // Hide cash out button
+            document.getElementById("cashOutButton").classList.remove("show");
+
+            // Update button colors
+            const buttons = [halfButton, actionButton, doubleButton, sellButton];
+            buttons.forEach(button => {
+              button.style.backgroundColor = buttonBgColor;
+              button.style.color = buttonTextColor;
+              button.style.borderBottomColor = buttonBorderColor;
+              button.style.borderLeftColor = buttonBorderColor;
+              button.style.borderRightColor = buttonBorderColor;
+            });
+
+            // Keep the color changes but remove disabling
+            halfButton.style.color = buttonBgColor;
+            doubleButton.style.color = buttonBgColor;
+
+            // Show sell button group and hide buy button group
+            document.querySelector('.button-group').style.display = 'none';
+            sellButtonGroup.style.display = 'flex';
+            sellButton.innerText = `SELL - ${formatCurrency(currentValue)}`;
+          } else {
+            // We don't have a position, so we're in BUY mode
+            document.getElementById("portfolioValue").style.color = "#2D732D";
+            document.getElementById("marketCapText").style.color = "#2D732D";
+            document.body.style.backgroundColor = "#0B351E";
+            document.getElementById("portfolioContainer").style.backgroundColor = "#57E057";
+            document.getElementById("portfolioContainer").style.borderBottomColor = "#46C446";
+            document.getElementById("left-chain").style.backgroundColor = "#57E057";
+            document.getElementById("right-chain").style.backgroundColor = "#57E057";
+
+            // Calculate price impact for potential buy order
+            const potentialBuyAmount = cash * buyMultiplier;
+            const rawRatio = potentialBuyAmount / currentMarketCap;
+            let impactRatio;
+            if (rawRatio <= 0.1) {
+              impactRatio = rawRatio * 1.5;
+            } else if (rawRatio <= 1.0) {
+              impactRatio = 0.15 + (rawRatio - 0.1) * 3.0;
+            } else {
+              impactRatio = 2.85 + (rawRatio - 1.0) * 5.0;
+            }
+
+            // Update price impact display
+            document.getElementById("priceImpactLabel").textContent = "Price Impact:";
+            priceImpactValue.textContent = `+${(impactRatio * 100).toFixed(2)}%`;
+            priceImpactValue.style.color = "#57E057";
+            priceImpactValue.parentElement.style.color = "#57E057";
+            document.getElementById("priceImpactLabel").style.color = "#57E057";
+
+            // Show cash out button only if user has made at least one trade
+            if (hasMadeTrade) {
+              document.getElementById("cashOutButton").classList.add("show");
+            } else {
+              document.getElementById("cashOutButton").classList.remove("show");
+            }
+
+            // Reset buttons to green colors
+            const buttons = [halfButton, actionButton, doubleButton, sellButton];
+            buttons.forEach(button => {
+              button.style.backgroundColor = "#57E057";
+              button.style.color = "#2D732D";
+              button.style.borderBottomColor = "#46C446";
+              button.style.borderLeftColor = "#46C446";
+              button.style.borderRightColor = "#46C446";
+            });
+
+            // Enable and reset multiplier buttons
+            halfButton.disabled = false;
+            doubleButton.disabled = false;
+            halfButton.style.color = "#2D732D";
+            doubleButton.style.color = "#2D732D";
+
+            // Show buy button group and hide sell button group
+            document.querySelector('.button-group').style.display = 'flex';
+            sellButtonGroup.style.display = 'none';
+
+            // Update action button with current buy amount
+            const buyAmount = cash * buyMultiplier;
+            actionButton.innerText = `BUY - ${formatCurrency(buyAmount)}`;
+          }
+
+          // Disable button during crashes
+          if (crashOccurred) {
+            actionButton.disabled = true;
+            sellButton.disabled = true;
+          }
+
+          document.getElementById("portfolioValue").innerText = formatCurrency(totalPortfolio);
+        };
+
+        // Reset game state variables
+        cash = 100;
+        currentMarketCap = 100000;
+        candles = [];
+        currentCandle = { open: null, high: null, low: null, close: null, orders: [] };
+        crashOccurred = false;
+        position = null;
+        hasMadeTrade = false;
+        buyMultiplier = 1;
+        gameStarted = true; // Set to true to skip start menu
+        
+        // Reset timestamps
+        startTime = Date.now();
+        lastCandleTimestamp = Date.now();
+        
+        // Reset viewport and scrolling
+        lockedViewport = null;
+        lockedScale = null;
+        currentScrollPosition = 0;
+        targetScrollPosition = 0;
+        
+        // Reset UI elements
+        document.getElementById("portfolioValue").innerText = formatCurrency(cash);
+        document.getElementById("marketCapText").innerText = `Market Cap: ${formatCurrency(currentMarketCap)}`;
+        document.getElementById("actionButton").innerText = "BUY - $100";
+        document.getElementById("ruggedMessage").style.display = "none";
+        document.getElementById("ruggedInfo").style.display = "none";
+        document.getElementById("chartGradient").classList.remove("show");
+        
+        // Reset position display
+        document.getElementById("priceImpactLabel").textContent = "Price Impact:";
+        document.getElementById("priceImpactValue").textContent = "+0.15%";
+        document.getElementById("priceImpactValue").style.color = "#57E057";
+        document.getElementById("priceImpactValue").parentElement.style.color = "#57E057";
+        document.getElementById("priceImpactLabel").style.color = "#57E057";
+        
+        // Reset colors and styles
+        document.body.style.backgroundColor = "#0B351E";
+        document.getElementById("portfolioContainer").style.backgroundColor = "#57E057";
+        document.getElementById("portfolioContainer").style.borderBottomColor = "#46C446";
+        document.getElementById("left-chain").style.backgroundColor = "#57E057";
+        document.getElementById("right-chain").style.backgroundColor = "#57E057";
+        document.getElementById("portfolioValue").style.color = "#2D732D";
+        document.getElementById("marketCapText").style.color = "#2D732D";
+        
+        // Reset buttons
+        const buttons = [halfButton, actionButton, doubleButton, sellButton];
+        buttons.forEach(button => {
+          button.style.backgroundColor = "#57E057";
+          button.style.color = "#2D732D";
+          button.style.borderBottomColor = "#46C446";
+          button.style.borderLeftColor = "#46C446";
+          button.style.borderRightColor = "#46C446";
+          button.disabled = false;
+        });
+        
+        // Show buy button group and hide sell button group
+        document.querySelector('.button-group').style.display = 'flex';
+        document.getElementById('sellButtonGroup').style.display = 'none';
+        
+        // Hide start menu
+        document.getElementById("startMenu").style.display = "none";
+        
+        // Show portfolio and controls with animations
+        document.getElementById("portfolioWrapper").classList.remove("crash");
+        document.getElementById("controls").classList.remove("crash");
+        document.getElementById("portfolioWrapper").classList.add("show");
+        document.getElementById("controls").classList.add("show");
+        
+        // Clear any existing timeouts
+        clearTimeout(gameUpdateTimeout);
+        clearTimeout(orderUpdateTimeout);
+        clearTimeout(crashCheckTimeout);
+        
+        // Redraw empty chart
+        drawChart();
+        
+        // Start game loops immediately
+        scheduleUpdate();
+        scheduleOrderUpdate();
+        setTimeout(checkForCrash, 1000);
+        
+        // Play background music
+        backgroundMusic.play();
+      });
+
+      // Listen for mute/unmute toggle requests
+      window.FarcadeSDK.on("toggle_mute", (data) => {
+        if (data.isMuted) {
+          backgroundMusic.muted = true;
+          backgroundMusic.pause();
+
+          popSound.muted = true;
+          crashSound.muted = true;
+        } else {
+          backgroundMusic.muted = false;
+          backgroundMusic.play();
+
+          popSound.muted = false;
+          crashSound.muted = false;
+        }
+
+
+      });
+
+      // Add cash out button click handler
+      cashOutButton.addEventListener("click", () => {
+        // Calculate total portfolio value
+        let totalPortfolio = cash;
+        if (position) {
+          const currentValue = position.amount * (currentMarketCap / position.buyPrice);
+          totalPortfolio += currentValue;
+        }
+        
+        // Stop all game loops
+        crashOccurred = true;
+        clearTimeout(gameUpdateTimeout);
+        clearTimeout(orderUpdateTimeout);
+        clearTimeout(crashCheckTimeout);
+        
+        // Call game over with portfolio value as score
+        window.FarcadeSDK.singlePlayer.actions.gameOver({ score: Math.floor(totalPortfolio) });
+      });
+
+      // Update the scheduleUpdate function
+      function scheduleUpdate() {
+        if (crashOccurred || !gameStarted) return;
+        const nextInterval = Math.random() * 450 + 50;
+        gameUpdateTimeout = setTimeout(gameUpdate, nextInterval);
+      }
+
+      // Update the scheduleOrderUpdate function
+      function scheduleOrderUpdate() {
+        if (crashOccurred || !gameStarted) return;
+        simulateOrders();
+        const nextDelay = Math.random() * 450 + 50;
+        orderUpdateTimeout = setTimeout(scheduleOrderUpdate, nextDelay);
+      }
+
+      // Update the checkForCrash function
+      function checkForCrash() {
+        if (crashOccurred || !gameStarted) return;
+
+        // Check current crash probability based on market cap
+        if (Math.random() < crashProbability(currentMarketCap)) {
+          executeCrash();
+          return;
+        }
+
+        // Schedule next crash check in 1 second
+        crashCheckTimeout = setTimeout(checkForCrash, 1000);
+      }
+    </script>
+  </body>
+</html>
