@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hyperputt - Mini Golf</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #2c5530;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+
+        #gameCanvas {
+            display: block;
+            background: #4a7c59;
+            cursor: crosshair;
+        }
+
+        #ui {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+            z-index: 100;
+        }
+
+
+
+        #powerBar {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            width: 20px;
+            height: 200px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid white;
+            border-radius: 10px;
+            overflow: hidden;
+            z-index: 100;
+        }
+
+        #powerFill {
+            width: 100%;
+            background: linear-gradient(180deg, #ff6b6b, #ff8e53, #ffd93d);
+            height: 0%;
+            transition: height 0.1s ease;
+            position: absolute;
+            bottom: 0;
+        }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js"
+        }
+      }
+    </script>
+    <script type="module">
+      import * as THREE_ns from 'three';
+      import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/OrbitControls.js';
+      const THREE = Object.assign({}, THREE_ns);
+      THREE.OrbitControls = OrbitControls;
+      window.THREE = THREE;
+    </script>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="ui">
+        <div>Strokes: <span id="strokeCount">0</span></div>
+        <div>Level: <span id="levelCount">1</span></div>
+    </div>
+    <div id="powerBar">
+        <div id="powerFill"></div>
+    </div>
+
+
+    <script>
+class Hyperputt3D {
+  constructor() {
+    this.canvas = document.getElementById('gameCanvas');
+    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setPixelRatio(window.devicePixelRatio);
+
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x2c5530);
+
+    this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 10000);
+    this.camera.position.set(0, 800, 0);
+
+    // Orbit controls (disabled by default, enabled while right mouse button held)
+    this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enablePan = false;
+    this.controls.enableDamping = true;
+    this.controls.enabled = true; // always enabled
+    // Use right mouse button for orbit rotation
+    this.controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
+    this.controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
+    this.controls.mouseButtons.MIDDLE = THREE.MOUSE.DOLLY;
+
+    this.orbiting = false;
+    this.followOffsetInitialized = false;
+    this.prevBallPos = new THREE.Vector2();
+
+    this.scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+    dir.position.set(300, 500, 200);
+    this.scene.add(dir);
+
+    this.raycaster = new THREE.Raycaster();
+    this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+
+    this.strokeCountElement = document.getElementById('strokeCount');
+    this.levelCountElement = document.getElementById('levelCount');
+    this.powerFillElement = document.getElementById('powerFill');
+
+    this.lastTime = 0;
+    this.gravity = 0.0006; // px per ms^2 downward
+    this.isDragging = false;
+    this.dragStart = new THREE.Vector3();
+    this.dragEnd = new THREE.Vector3();
+    this.power = 0;
+    this.maxPower = 800;
+
+    this.viewport = { width: window.innerWidth, height: window.innerHeight };
+    this.cellSize = 100;
+
+    this.level = 1;
+    this.strokes = 0;
+    this.inHole = false;
+    this.fallComplete = false;
+    this.holeFallVel = 0; // vertical velocity during fall
+    // Hole completion state
+    this.holeTimer = 0;
+    this.generateLevel();
+
+    window.addEventListener('resize', () => this.onResize());
+    this.canvas.addEventListener('mousedown', (e) => this.handlePointerDown(e));
+    this.canvas.addEventListener('mousemove', (e) => this.handlePointerMove(e));
+    this.canvas.addEventListener('mouseup', (e) => this.handlePointerUp(e));
+
+    // Right-click orbit handling
+    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    this.canvas.addEventListener('mousedown', (e) => {
+      if (e.button === 2) {
+        this.orbiting = true;
+        this.controls.target.set(this.ball.x, 0, this.ball.y);
+      }
+    });
+    this.canvas.addEventListener('mouseup', (e) => {
+      if (e.button === 2) {
+        this.orbiting = false;
+        // Store the offset attained after orbiting so camera continues with new orientation
+        this.followOffset.subVectors(this.camera.position, new THREE.Vector3(this.ball.x, 0, this.ball.y));
+      }
+    });
+    this.canvas.addEventListener('touchstart', (e) => { e.preventDefault(); this.handlePointerDown(e.touches[0]); });
+    this.canvas.addEventListener('touchmove', (e) => { e.preventDefault(); this.handlePointerMove(e.touches[0]); });
+    this.canvas.addEventListener('touchend', (e) => { e.preventDefault(); this.handlePointerUp(e.changedTouches ? e.changedTouches[0] : e); });
+
+    requestAnimationFrame((t) => this.loop(t));
+  }
+
+  onResize() {
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.camera.aspect = window.innerWidth / window.innerHeight;
+    this.camera.updateProjectionMatrix();
+    this.viewport.width = window.innerWidth;
+    this.viewport.height = window.innerHeight;
+  }
+
+  generateLevel() {
+    const lights = this.scene.children.filter((c) => c.isLight);
+    this.scene.clear();
+    lights.forEach((l) => this.scene.add(l));
+
+    const minCols = Math.ceil(this.viewport.width / this.cellSize) + 4;
+    const minRows = Math.ceil(this.viewport.height / this.cellSize) + 2;
+    const cols = Math.max(14, minCols);
+    const rows = Math.max(10, minRows);
+    const startRow = Math.floor(Math.random() * rows);
+    const endRow = Math.floor(Math.random() * rows);
+    const grid = Array.from({ length: rows }, () => Array(cols).fill(0));
+
+    const queue = [];
+    const visited = Array.from({ length: rows }, () => Array(cols).fill(false));
+    const parent = Array.from({ length: rows }, () => Array(cols).fill(null));
+    queue.push([startRow, 0]);
+    visited[startRow][0] = true;
+    const dirs = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ];
+    while (queue.length) {
+      const [r, c] = queue.shift();
+      if (r === endRow && c === cols - 1) break;
+      dirs.forEach(([dr, dc]) => {
+        const nr = r + dr;
+        const nc = c + dc;
+        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !visited[nr][nc]) {
+          visited[nr][nc] = true;
+          parent[nr][nc] = [r, c];
+          queue.push([nr, nc]);
+        }
+      });
+    }
+    let path = [];
+    let cur = [endRow, cols - 1];
+    while (cur) {
+      path.push(cur);
+      cur = parent[cur[0]][cur[1]];
+    }
+    path = path.reverse();
+    const carveCell = (r, c, rad = 1) => {
+      for (let dr = -rad; dr <= rad; dr++) {
+        for (let dc = -rad; dc <= rad; dc++) {
+          const rr = r + dr;
+          const cc = c + dc;
+          if (rr >= 0 && rr < rows && cc >= 0 && cc < cols) grid[rr][cc] = 1;
+        }
+      }
+    };
+    path.forEach(([r, c]) => carveCell(r, c, 1));
+    carveCell(endRow, cols - 1, 2);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (grid[r][c] === 1) {
+          [
+            [r - 1, c],
+            [r + 1, c],
+            [r, c - 1],
+            [r, c + 1],
+          ].forEach(([nr, nc]) => {
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && Math.random() < 0.2) grid[nr][nc] = 1;
+          });
+        }
+      }
+    }
+    const protectedSet = new Set(path.map(([r, c]) => `${r},${c}`));
+    let changed = true;
+    while (changed) {
+      changed = false;
+      const toFill = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (grid[r][c] !== 1) continue;
+          if (protectedSet.has(`${r},${c}`)) continue;
+          let wallsAdj = 0;
+          if (r === 0 || grid[r - 1][c] === 0) wallsAdj++;
+          if (r === rows - 1 || grid[r + 1][c] === 0) wallsAdj++;
+          if (c === 0 || grid[r][c - 1] === 0) wallsAdj++;
+          if (c === cols - 1 || grid[r][c + 1] === 0) wallsAdj++;
+          if (wallsAdj >= 3) toFill.push([r, c]);
+        }
+      }
+      if (toFill.length) {
+        changed = true;
+        toFill.forEach(([r, c]) => (grid[r][c] = 0));
+      }
+    }
+    this.grid = grid;
+    this.edges = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (grid[r][c] !== 1) continue;
+        const x = c * this.cellSize;
+        const y = r * this.cellSize;
+        if (r === 0 || grid[r - 1][c] === 0) this.edges.push({ x1: x, y1: y, x2: x + this.cellSize, y2: y, horizontal: true });
+        if (r === rows - 1 || grid[r + 1][c] === 0) this.edges.push({ x1: x, y1: y + this.cellSize, x2: x + this.cellSize, y2: y + this.cellSize, horizontal: true });
+        if (c === 0 || grid[r][c - 1] === 0) this.edges.push({ x1: x, y1: y, x2: x, y2: y + this.cellSize, horizontal: false });
+        if (c === cols - 1 || grid[r][c + 1] === 0) this.edges.push({ x1: x + this.cellSize, y1: y, x2: x + this.cellSize, y2: y + this.cellSize, horizontal: false });
+      }
+    }
+
+    this.worldWidth = cols * this.cellSize;
+    this.worldHeight = rows * this.cellSize;
+
+    this.ball = { x: this.cellSize / 2, y: startRow * this.cellSize + this.cellSize / 2, radius: 8, vx: 0, vy: 0, vz: 0, friction: 0.98 };
+    if (!this.followOffsetInitialized) {
+      this.prevBallPos.set(this.ball.x, this.ball.y);
+      this.followOffsetInitialized = true;
+    }
+    this.hole = { x: (cols - 0.5) * this.cellSize, y: endRow * this.cellSize + this.cellSize / 2, radius: 25 };
+
+    this.obstacles = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (grid[r][c] === 1 && !protectedSet.has(`${r},${c}`) && Math.random() < 0.03) {
+          const ox = c * this.cellSize + this.cellSize / 2;
+          const oy = r * this.cellSize + this.cellSize / 2;
+          const bDist = Math.hypot(ox - this.ball.x, oy - this.ball.y);
+          const hDist = Math.hypot(ox - this.hole.x, oy - this.hole.y);
+          if (bDist > 250 && hDist > 300) this.obstacles.push({ x: ox, y: oy, radius: 20 + Math.random() * 15 });
+        }
+      }
+    }
+    this.buildScene();
+  }
+
+  buildScene() {
+    // Build floor tiles only inside the playable path grid cells
+    const tileGeom = new THREE.PlaneGeometry(this.cellSize, this.cellSize);
+    tileGeom.rotateX(-Math.PI / 2);
+    const tileMat = new THREE.MeshStandardMaterial({ color: 0x1c5d1d });
+    const bottomMat = new THREE.MeshStandardMaterial({ color: 0x55d04f, side: THREE.DoubleSide });
+    const holeRow = Math.floor(this.hole.y / this.cellSize);
+    const holeCol = Math.floor(this.hole.x / this.cellSize);
+    for (let r = 0; r < this.grid.length; r++) {
+      for (let c = 0; c < this.grid[0].length; c++) {
+        if (this.grid[r][c] !== 1) continue;
+        if (r === holeRow && c === holeCol) continue; // leave hole cell empty
+        const mesh = new THREE.Mesh(tileGeom, tileMat);
+        mesh.position.set(c * this.cellSize + this.cellSize / 2, 0, r * this.cellSize + this.cellSize / 2);
+        this.scene.add(mesh);
+
+        // underside tile slightly below main tile for below-map view
+        const bottomMesh = new THREE.Mesh(tileGeom, bottomMat);
+        bottomMesh.position.set(c * this.cellSize + this.cellSize / 2, -0.2, r * this.cellSize + this.cellSize / 2);
+        this.scene.add(bottomMesh);
+      }
+    }
+
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x55d04f });
+    const wallHeight = 10; // even lower height (50% of previous)
+    const wallThickness = 10; // original thickness
+    this.edges.forEach((edge) => {
+      const length = edge.horizontal ? Math.abs(edge.x2 - edge.x1) : Math.abs(edge.y2 - edge.y1);
+      const geom = edge.horizontal ? new THREE.BoxGeometry(length, wallHeight, wallThickness) : new THREE.BoxGeometry(wallThickness, wallHeight, length);
+      const mesh = new THREE.Mesh(geom, wallMat);
+      const midX = (edge.x1 + edge.x2) / 2;
+      const midZ = (edge.y1 + edge.y2) / 2;
+      mesh.position.set(midX, wallHeight / 2, midZ);
+      this.scene.add(mesh);
+    });
+
+    // ----- Rounded corner pillars (only at 90° turns) -----
+    const vertexMap = new Map(); // key -> {hor, vert}
+    const ensureVertexEntry = (x, z) => {
+      const key = `${x.toFixed(1)},${z.toFixed(1)}`;
+      if (!vertexMap.has(key)) vertexMap.set(key, { x, z, hor: false, vert: false });
+      return vertexMap.get(key);
+    };
+    this.edges.forEach((edge) => {
+      ensureVertexEntry(edge.x1, edge.y1)[edge.horizontal ? 'hor' : 'vert'] = true;
+      ensureVertexEntry(edge.x2, edge.y2)[edge.horizontal ? 'hor' : 'vert'] = true;
+    });
+    const pillarRadius = wallThickness / 2; // make pillar flush with wall edges
+    const pillarGeom = new THREE.CylinderGeometry(pillarRadius, pillarRadius, wallHeight, 16);
+    vertexMap.forEach((v) => {
+      if (v.hor && v.vert) {
+        const mesh = new THREE.Mesh(pillarGeom, wallMat);
+        mesh.position.set(v.x, wallHeight / 2, v.z);
+        this.scene.add(mesh);
+      }
+    });
+
+    const obsMat = new THREE.MeshStandardMaterial({ color: 0x8b4513 });
+    this.obstacles.forEach((obs) => {
+      const geom = new THREE.CylinderGeometry(obs.radius, obs.radius, 40, 16);
+      const mesh = new THREE.Mesh(geom, obsMat);
+      mesh.position.set(obs.x, 20, obs.y);
+      this.scene.add(mesh);
+      obs.mesh = mesh;
+    });
+
+    // --- Real hole: black disk & recessed pit ---
+    const holeMat = new THREE.MeshStandardMaterial({ color: 0x235e20, side: THREE.DoubleSide });
+    const rimThickness = 0.4;
+    const rimGeom = new THREE.TorusGeometry(this.hole.radius - rimThickness, rimThickness, 8, 32);
+    this.holeRimMesh = new THREE.Mesh(rimGeom, new THREE.MeshStandardMaterial({ color: 0x235e20 }));
+    this.holeRimMesh.rotation.x = Math.PI / 2;
+    this.holeRimMesh.position.set(this.hole.x, 0, this.hole.y);
+    this.scene.add(this.holeRimMesh);
+
+    this.holeDepth = this.ball.radius * 2 + 6;
+    const pitGeom = new THREE.CylinderGeometry(this.hole.radius - rimThickness, this.hole.radius - rimThickness, this.holeDepth, 32, 1, true);
+    const pitMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, side: THREE.BackSide });
+    const pitMesh = new THREE.Mesh(pitGeom, pitMat);
+    pitMesh.position.set(this.hole.x, -this.holeDepth / 2, this.hole.y);
+    this.scene.add(pitMesh);
+
+    const ballGeom = new THREE.SphereGeometry(this.ball.radius, 32, 32);
+    const ballMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    this.ballMesh = new THREE.Mesh(ballGeom, ballMat);
+    this.ballMesh.position.set(this.ball.x, this.ball.radius, this.ball.y);
+    this.scene.add(this.ballMesh);
+  }
+
+  getPointerWorldPos(ev) {
+    const rect = this.canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const pt = new THREE.Vector3();
+    this.raycaster.ray.intersectPlane(this.groundPlane, pt);
+    return pt;
+  }
+
+  handlePointerDown(ev) {
+    if (ev.button !== 0) return; // only left button for aiming
+    const speed = Math.hypot(this.ball.vx, this.ball.vy);
+    if (speed > 0.5 || this.inHole) return;
+
+    this.isDragging = true;
+    this.dragStart = new THREE.Vector3(this.ball.x, 0, this.ball.y);
+    this.dragEnd = this.getPointerWorldPos(ev);
+  }
+
+  handlePointerMove(ev) {
+    if (!this.isDragging) return;
+    const wp = this.getPointerWorldPos(ev);
+    const dx0 = wp.x - this.dragStart.x;
+    const dy0 = wp.z - this.dragStart.z;
+    const dist0 = Math.hypot(dx0, dy0);
+    const maxDrag = this.maxPower / 4;
+    let target = wp;
+    if (dist0 > maxDrag) {
+      const f = maxDrag / dist0;
+      target = new THREE.Vector3(this.dragStart.x + dx0 * f, 0, this.dragStart.z + dy0 * f);
+    }
+    this.dragEnd = target;
+    const dx = this.dragStart.x - this.dragEnd.x;
+    const dy = this.dragStart.z - this.dragEnd.z;
+    const distance = Math.hypot(dx, dy);
+    this.power = Math.min(distance * 4, this.maxPower);
+    this.powerFillElement.style.height = `${(this.power / this.maxPower) * 100}%`;
+  }
+
+  handlePointerUp() {
+    if (!this.isDragging) return;
+    this.isDragging = false;
+    const dx = this.dragStart.x - this.dragEnd.x;
+    const dy = this.dragStart.z - this.dragEnd.z;
+    const distance = Math.hypot(dx, dy);
+    if (distance > 10) {
+      this.ball.vx = (dx / distance) * (this.power / 10);
+      this.ball.vy = (dy / distance) * (this.power / 10);
+      this.strokes++;
+      this.strokeCountElement.textContent = this.strokes;
+    }
+    this.power = 0;
+    this.powerFillElement.style.height = '0%';
+  }
+
+  updatePhysics(dt) {
+    const timeScale = dt / 16.67;
+    const maxMove = Math.max(Math.abs(this.ball.vx), Math.abs(this.ball.vy)) * timeScale;
+    const stepSize = this.ball.radius / 2;
+    const steps = Math.max(1, Math.ceil(maxMove / stepSize));
+    for (let i = 0; i < steps; i++) {
+      const subFactor = timeScale / steps;
+      this.ball.x += this.ball.vx * subFactor;
+      this.ball.y += this.ball.vy * subFactor;
+    }
+    this.ball.vx *= this.ball.friction;
+    this.ball.vy *= this.ball.friction;
+    if (Math.abs(this.ball.vx) < 0.1) this.ball.vx = 0;
+    if (Math.abs(this.ball.vy) < 0.1) this.ball.vy = 0;
+    const outlineHalf = 4; // restore to match wall thickness
+    this.edges.forEach((edge) => {
+      if (edge.horizontal) {
+        const minX = Math.min(edge.x1, edge.x2);
+        const maxX = Math.max(edge.x1, edge.x2);
+        const dy = this.ball.y - edge.y1;
+        if (Math.abs(dy) < this.ball.radius + outlineHalf && this.ball.x >= minX && this.ball.x <= maxX) {
+          const overlap = this.ball.radius + outlineHalf - Math.abs(dy);
+          const sign = dy > 0 ? 1 : -1;
+          this.ball.y += overlap * sign;
+          this.ball.vy *= -0.8;
+        }
+      } else {
+        const minY = Math.min(edge.y1, edge.y2);
+        const maxY = Math.max(edge.y1, edge.y2);
+        const dx = this.ball.x - edge.x1;
+        if (Math.abs(dx) < this.ball.radius + outlineHalf && this.ball.y >= minY && this.ball.y <= maxY) {
+          const overlap = this.ball.radius + outlineHalf - Math.abs(dx);
+          const sign = dx > 0 ? 1 : -1;
+          this.ball.x += overlap * sign;
+          this.ball.vx *= -0.8;
+        }
+      }
+    });
+    this.obstacles.forEach((obs) => {
+      const dx = this.ball.x - obs.x;
+      const dy = this.ball.y - obs.y;
+      const distance = Math.hypot(dx, dy);
+      const minDistance = this.ball.radius + obs.radius;
+      if (distance < minDistance) {
+        const angle = Math.atan2(dy, dx);
+        const overlap = minDistance - distance;
+        this.ball.x += Math.cos(angle) * overlap;
+        this.ball.y += Math.sin(angle) * overlap;
+        const normalX = dx / distance;
+        const normalY = dy / distance;
+        const dot = this.ball.vx * normalX + this.ball.vy * normalY;
+        this.ball.vx -= 2 * dot * normalX;
+        this.ball.vy -= 2 * dot * normalY;
+        this.ball.vx *= 0.9;
+        this.ball.vy *= 0.9;
+      }
+    });
+    const g = this.gravity;
+    if (this.inHole) {
+      if (!this.fallComplete) {
+        // physics-based fall using gravity
+        this.holeFallVel += g * dt;
+        this.ballMesh.position.y -= this.holeFallVel * dt; // downward
+        const targetY = -this.holeDepth / 2 + this.ball.radius;
+        if (this.ballMesh.position.y <= targetY) {
+          this.ballMesh.position.y = targetY;
+          this.fallComplete = true;
+          this.holeTimer = 0;
+        }
+      } else {
+        this.holeTimer += dt;
+        if (this.holeTimer >= 1000) {
+          this.nextLevel();
+        }
+      }
+      return;
+    }
+
+    if (this.ball.x - this.ball.radius < 0) {
+      this.ball.x = this.ball.radius;
+      this.ball.vx *= -0.8;
+    } else if (this.ball.x + this.ball.radius > this.worldWidth) {
+      this.ball.x = this.worldWidth - this.ball.radius;
+      this.ball.vx *= -0.8;
+    }
+    if (this.ball.y - this.ball.radius < 0) {
+      this.ball.y = this.ball.radius;
+      this.ball.vy *= -0.8;
+    } else if (this.ball.y + this.ball.radius > this.worldHeight) {
+      this.ball.y = this.worldHeight - this.ball.radius;
+      this.ball.vy *= -0.8;
+    }
+    const dx2 = this.ball.x - this.hole.x;
+    const dy2 = this.ball.y - this.hole.y;
+    const dist2 = Math.hypot(dx2, dy2);
+    if (!this.inHole && dist2 < this.hole.radius && Math.abs(this.ball.vx) < 2 && Math.abs(this.ball.vy) < 2) {
+      this.inHole = true;
+      this.fallComplete = false;
+      this.holeTimer = 0;
+      this.holeFallVel = 0;
+      // Stop ball horizontal motion and align to hole center for cleaner drop
+      this.ball.vx = this.ball.vy = 0;
+      this.ball.x = this.hole.x;
+      this.ball.y = this.hole.y;
+      this.ballMesh.position.set(this.ball.x, this.ball.radius, this.ball.y);
+    }
+    // --- Apply gravity always ---
+    this.ball.vz -= g * dt; // apply gravity
+    this.ballMesh.position.y += this.ball.vz * dt;
+
+    // Ground collision outside hole
+    const dxHole = this.ball.x - this.hole.x;
+    const dyHole = this.ball.y - this.hole.y;
+    const distHole = Math.hypot(dxHole, dyHole);
+    const onGround = this.ballMesh.position.y - this.ball.radius <= 0;
+    if (onGround && distHole > this.hole.radius - this.ball.radius) {
+      this.ballMesh.position.y = this.ball.radius;
+      if (this.ball.vz < 0) this.ball.vz *= -0.4; // bounce with restitution
+      // apply rolling friction when on ground
+      this.ball.vx *= this.ball.friction;
+      this.ball.vy *= this.ball.friction;
+    }
+
+    // Rim collision (vertical cylinder)
+    const rimInner = this.hole.radius - this.ball.radius;
+    if (distHole < this.hole.radius + this.ball.radius && distHole > rimInner && this.ballMesh.position.y - this.ball.radius < 0.5) {
+      // compute normal
+      const nx = dxHole / distHole;
+      const ny = dyHole / distHole;
+      const dot = this.ball.vx * nx + this.ball.vy * ny;
+      if (dot < 0) {
+        this.ball.vx -= 2 * dot * nx;
+        this.ball.vy -= 2 * dot * ny;
+        // small vertical kick if hitting rim hard
+        this.ball.vz = 0.2;
+        // move out of rim overlap
+        const penetration = this.hole.radius + this.ball.radius - distHole;
+        this.ball.x -= nx * penetration;
+        this.ball.y -= ny * penetration;
+      }
+    }
+    this.ballMesh.position.set(this.ball.x, this.ballMesh.position.y, this.ball.y);
+  }
+
+  nextLevel() {
+    this.level++;
+    this.strokeCountElement.textContent = this.strokes = 0;
+    this.levelCountElement.textContent = this.level;
+    this.inHole = false;
+    this.holeFallVel = 0;
+    this.fallComplete = false;
+    this.holeTimer = 0;
+    this.generateLevel();
+  }
+
+  loop(time = 0) {
+    const delta = time - this.lastTime;
+    this.lastTime = time;
+    this.updatePhysics(delta);
+
+    // Update camera / controls
+    const target = new THREE.Vector3(this.ball.x, 0, this.ball.y);
+    this.controls.target.copy(target);
+
+    if (!this.orbiting) {
+      // Translate camera by the ball's displacement to maintain relative framing
+      const dxCam = this.ball.x - this.prevBallPos.x;
+      const dyCam = this.ball.y - this.prevBallPos.y;
+      this.camera.position.x += dxCam;
+      this.camera.position.z += dyCam;
+    }
+    this.controls.update();
+
+    this.prevBallPos.set(this.ball.x, this.ball.y);
+    this.renderer.render(this.scene, this.camera);
+    requestAnimationFrame((t) => this.loop(t));
+  }
+}
+window.addEventListener('load', () => new Hyperputt3D());
+    </script>
+</body>
+</html> 
